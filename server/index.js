@@ -50,15 +50,15 @@ app.post("/api/searchForPodcast", async (req, res) => {
   await axios.get(url, options).then((response) => {
     // console.log(response.data);
     const feeds = response.data.feeds;
-    const episodes = [];
+    const podcasts = [];
     feeds.forEach((feed) => {
-      episodes.push({
+      podcasts.push({
         title: feed.title,
         url: feed.url,
       });
     });
-    console.log(episodes);
-    res.json({ episodes });
+    console.log(podcasts);
+    res.json({ podcasts });
   });
 });
 
