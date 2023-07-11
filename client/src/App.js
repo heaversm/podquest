@@ -7,20 +7,31 @@ import "@fontsource/roboto/700.css";
 import React from "react";
 import "./App.css";
 
-import { FormContainer } from "./components/FormContainer";
-import { ResultsContainer } from "./components/ResultsContainer";
+import { PodcastForm } from "./components/PodcastSelector/PodcastForm";
+import { PodcastResults } from "./components/PodcastSelector/PodcastResults";
+import { EpisodeResults } from "./components/PodcastSelector/EpisodeResults";
 
 function App() {
   const [podcasts, setPodcasts] = React.useState([]);
+  const [episodes, setEpisodes] = React.useState([]);
 
   const handleSetPodcasts = (podcastList) => {
     setPodcasts(podcastList);
   };
 
+  const handleSetEpisodes = (episodesList) => {
+    console.log(episodesList);
+    setEpisodes(episodesList);
+  };
+
   return (
     <div className="App">
-      <FormContainer handleSetPodcasts={handleSetPodcasts} />
-      <ResultsContainer podcasts={podcasts} />
+      <PodcastForm handleSetPodcasts={handleSetPodcasts} />
+      <PodcastResults
+        podcasts={podcasts}
+        handleSetEpisodes={handleSetEpisodes}
+      />
+      <EpisodeResults episodes={episodes} />
     </div>
   );
 }

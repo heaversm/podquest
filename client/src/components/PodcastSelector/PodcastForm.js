@@ -3,7 +3,7 @@ import TextField from "@mui/material/TextField";
 import Box from "@mui/material/Box";
 
 import React from "react";
-export function FormContainer({ handleSetPodcasts }) {
+export function PodcastForm({ handleSetPodcasts }) {
   const [podcastName, setPodcastName] = React.useState("");
 
   const handlePodcastSearch = (e) => {
@@ -28,7 +28,7 @@ export function FormContainer({ handleSetPodcasts }) {
   };
 
   return (
-    <div className="formContainer">
+    <div className="podcastFormContainer">
       <Box
         component="form"
         sx={{
