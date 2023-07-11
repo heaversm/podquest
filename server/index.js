@@ -1,10 +1,30 @@
 const express = require("express");
 const path = require("path");
 const dotenv = require("dotenv");
+const fs = require("fs");
 dotenv.config();
 
 const crypto = require("crypto");
 const axios = require("axios");
+
+const { Configuration, OpenAIApi } = require("openai");
+
+const configuration = new Configuration({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+const openai = new OpenAIApi(configuration);
+
+const testOpenAIConfig = async () => {
+  const filePath = path.join(__dirname, "audio.mp3");
+  await openai
+    .createTranscription(fs.createReadStream(filePath), "whisper-1")
+    .then((response) => {
+      console.log(response.data);
+    })
+    .catch((err) => {
+      console.log(err);
+    });
+};
 
 const PORT = process.env.PORT || 3001;
 
@@ -15,8 +35,9 @@ app.use(express.json());
 app.use(express.static(path.resolve(__dirname, "../client/build")));
 
 // Handle GET requests to /api route
-app.get("/api", (req, res) => {
+app.get("/api/testOpenAIConfig", async (req, res) => {
   res.json({ message: "Connected to Server" });
+  testOpenAIConfig();
 });
 
 app.post("/api/searchForPodcast", async (req, res) => {

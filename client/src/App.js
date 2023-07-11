@@ -4,7 +4,7 @@ import "@fontsource/roboto/400.css";
 import "@fontsource/roboto/500.css";
 import "@fontsource/roboto/700.css";
 
-import React from "react";
+import React, { useEffect } from "react";
 import "./App.css";
 
 import { PodcastForm } from "./components/PodcastSelector/PodcastForm";
@@ -14,6 +14,12 @@ import { EpisodeResults } from "./components/PodcastSelector/EpisodeResults";
 function App() {
   const [podcasts, setPodcasts] = React.useState([]);
   const [episodes, setEpisodes] = React.useState([]);
+
+  useEffect(() => {
+    fetch("/api/testOpenAIConfig", {
+      method: "GET",
+    });
+  }, []);
 
   const handleSetPodcasts = (podcastList) => {
     setPodcasts(podcastList);
