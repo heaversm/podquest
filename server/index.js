@@ -10,11 +10,22 @@ const https = require("https");
 const { v4: uuidv4 } = require("uuid");
 
 const { Configuration, OpenAIApi } = require("openai");
+const {
+  CharacterTextSplitter,
+  RecursiveCharacterTextSplitter,
+} = require("langchain/text_splitter");
+const { Document } = require("langchain/document");
+const { FaissStore } = require("langchain/vectorstores/faiss");
+const { OpenAIEmbeddings } = require("langchain/embeddings/openai");
+const { RetrievalQAChain } = require("langchain/chains");
 
 const configuration = new Configuration({
   apiKey: process.env.OPENAI_API_KEY,
 });
 const openai = new OpenAIApi(configuration);
+
+//llm
+const { OpenAI } = require("langchain/llms/openai");
 
 const transcribeAudio = async (filePath) => {
   const transcription = await openai
@@ -174,7 +185,36 @@ app.post("/api/transcribeEpisode", async (req, res) => {
   const filePath = await getAudioFromURL(tempURL);
   console.log(filePath);
   const transcription = await transcribeAudio(filePath);
-  console.log(transcription);
+
+  const llm = new OpenAI();
+
+  fs.unlink(filePath, (err) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ error: err });
+    }
+  });
+
+  const splitter = new RecursiveCharacterTextSplitter({
+    chunkSize: 256,
+    chunkOverlap: 0,
+  });
+
+  const output = await splitter.splitDocuments([
+    new Document({ pageContent: transcription.text }),
+  ]);
+  // console.log(output);
+  const vectorStore = await FaissStore.fromDocuments(
+    output,
+    new OpenAIEmbeddings()
+  );
+  const retriever = vectorStore.asRetriever();
+  // console.log("Retriever created", retriever);
+  const chain = RetrievalQAChain.fromLLM(llm, retriever);
+  const chainResponse = await chain.call({
+    query: "What is this podcast about?",
+  });
+  console.log({ chainResponse });
 });
 
 // All other GET requests not handled before will return our React app
