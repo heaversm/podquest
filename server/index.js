@@ -6,6 +6,8 @@ dotenv.config();
 
 const crypto = require("crypto");
 const axios = require("axios");
+const https = require("https");
+const { v4: uuidv4 } = require("uuid");
 
 const { Configuration, OpenAIApi } = require("openai");
 
@@ -14,16 +16,17 @@ const configuration = new Configuration({
 });
 const openai = new OpenAIApi(configuration);
 
-const testOpenAIConfig = async () => {
-  const filePath = path.join(__dirname, "audio.mp3");
-  await openai
+const transcribeAudio = async (filePath) => {
+  const transcription = await openai
     .createTranscription(fs.createReadStream(filePath), "whisper-1")
     .then((response) => {
       console.log(response.data);
+      return response.data;
     })
     .catch((err) => {
       console.log(err);
     });
+  return transcription;
 };
 
 const PORT = process.env.PORT || 3001;
@@ -37,7 +40,6 @@ app.use(express.static(path.resolve(__dirname, "../client/build")));
 // Handle GET requests to /api route
 app.get("/api/testOpenAIConfig", async (req, res) => {
   res.json({ message: "Connected to Server" });
-  testOpenAIConfig();
 });
 
 app.post("/api/searchForPodcast", async (req, res) => {
@@ -132,9 +134,47 @@ app.post("/api/searchForEpisodes", async (req, res) => {
   });
 });
 
+const getAudioFromURL = async (url) => {
+  return new Promise((resolve, reject) => {
+    https
+      .get(url, (response) => {
+        if (response.statusCode === 200) {
+          const chunks = [];
+
+          response.on("data", (chunk) => {
+            chunks.push(chunk);
+          });
+
+          response.on("end", () => {
+            const chunkedBuffer = Buffer.concat(chunks);
+            const fileID = uuidv4();
+            const fileName = `${fileID}.mp3`;
+
+            fs.writeFileSync(fileName, chunkedBuffer);
+            const filePath = path.join(__dirname, `../${fileName}`);
+            return resolve(filePath);
+          });
+        } else {
+          //reject with the error message
+          return reject("Error retrieving MP3 file");
+        }
+      })
+      .on("error", (error) => {
+        console.error("Error retrieving MP3 file:", error);
+        return res.status(400).json({ error: error });
+      });
+  });
+};
+
 app.post("/api/transcribeEpisode", async (req, res) => {
   const { episodeUrl } = req.body;
   console.log(episodeUrl);
+  const tempURL =
+    "https://media.rss.com/digitalfuturestold/2023_03_07_20_45_19_d06c1ad6-ac3f-4f01-93fc-a9a01a7b76f2.mp3";
+  const filePath = await getAudioFromURL(tempURL);
+  console.log(filePath);
+  const transcription = await transcribeAudio(filePath);
+  console.log(transcription);
 });
 
 // All other GET requests not handled before will return our React app

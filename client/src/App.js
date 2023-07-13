@@ -15,12 +15,6 @@ function App() {
   const [podcasts, setPodcasts] = React.useState([]);
   const [episodes, setEpisodes] = React.useState([]);
 
-  useEffect(() => {
-    fetch("/api/testOpenAIConfig", {
-      method: "GET",
-    });
-  }, []);
-
   const handleSetPodcasts = (podcastList) => {
     setPodcasts(podcastList);
   };
