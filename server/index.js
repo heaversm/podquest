@@ -24,6 +24,8 @@ const configuration = new Configuration({
 });
 const openai = new OpenAIApi(configuration);
 
+let chain;
+
 //llm
 const { OpenAI } = require("langchain/llms/openai");
 
@@ -177,6 +179,16 @@ const getAudioFromURL = async (url) => {
   });
 };
 
+app.post("/api/performUserQuery", async (req, res) => {
+  const { query } = req.body;
+  // console.log(query);
+  const chainResponse = await chain.call({
+    query: query,
+  });
+  console.log({ chainResponse });
+  return res.status(200).json({ text: chainResponse.text });
+});
+
 app.post("/api/transcribeEpisode", async (req, res) => {
   const { episodeUrl } = req.body;
   console.log(episodeUrl);
@@ -210,11 +222,13 @@ app.post("/api/transcribeEpisode", async (req, res) => {
   );
   const retriever = vectorStore.asRetriever();
   // console.log("Retriever created", retriever);
-  const chain = RetrievalQAChain.fromLLM(llm, retriever);
-  const chainResponse = await chain.call({
-    query: "What is this podcast about?",
-  });
-  console.log({ chainResponse });
+  // chain = RetrievalQAChain.fromLLM(llm, retriever);
+  chain = RetrievalQAChain.fromLLM(llm, retriever);
+  return res.status(200).json({ llmReady: true });
+  // const chainResponse = await chain.call({
+  //   query: "What is this podcast about?",
+  // });
+  // console.log({ chainResponse });
 });
 
 // All other GET requests not handled before will return our React app

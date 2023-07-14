@@ -8,7 +8,7 @@ import MenuItem from "@mui/material/MenuItem";
 import Select, { SelectChangeEvent } from "@mui/material/Select";
 import Box from "@mui/material/Box";
 
-export function EpisodeResults({ episodes }) {
+export function EpisodeResults({ episodes, handleSetLLMReady }) {
   const [episode, setEpisode] = React.useState("");
 
   const handleEpisodeChange = (e) => {
@@ -26,6 +26,9 @@ export function EpisodeResults({ episodes }) {
       .then((res) => res.json())
       .then((data) => {
         console.log("data", data);
+        if (data.llmReady) {
+          handleSetLLMReady(true);
+        }
       })
       .catch((err) => {
         console.log("err", err);
