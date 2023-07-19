@@ -1,23 +1,27 @@
-const express = require("express");
-const path = require("path");
-const dotenv = require("dotenv");
-const fs = require("fs");
+import express from "express";
+import path from "path";
+import dotenv from "dotenv";
+import fs from "fs";
 dotenv.config();
 
-const crypto = require("crypto");
-const axios = require("axios");
-const https = require("https");
-const { v4: uuidv4 } = require("uuid");
+//required for upgrade to es modules
+import { fileURLToPath } from "url";
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-const { Configuration, OpenAIApi } = require("openai");
-const {
+import crypto from "crypto";
+import axios from "axios";
+import https from "https";
+import { v4 as uuidv4 } from "uuid";
+import { Configuration, OpenAIApi } from "openai";
+import {
   CharacterTextSplitter,
   RecursiveCharacterTextSplitter,
-} = require("langchain/text_splitter");
-const { Document } = require("langchain/document");
-const { FaissStore } = require("langchain/vectorstores/faiss");
-const { OpenAIEmbeddings } = require("langchain/embeddings/openai");
-const { RetrievalQAChain } = require("langchain/chains");
+} from "langchain/text_splitter";
+import { Document } from "langchain/document";
+import { FaissStore } from "langchain/vectorstores/faiss";
+import { OpenAIEmbeddings } from "langchain/embeddings/openai";
+import { RetrievalQAChain } from "langchain/chains";
 
 const configuration = new Configuration({
   apiKey: process.env.OPENAI_API_KEY,
@@ -27,7 +31,7 @@ const openai = new OpenAIApi(configuration);
 let chain;
 
 //llm
-const { OpenAI } = require("langchain/llms/openai");
+import { OpenAI } from "langchain/llms/openai";
 
 const transcribeAudio = async (filePath) => {
   const transcription = await openai
@@ -174,7 +178,7 @@ const getAudioFromURL = async (url) => {
       })
       .on("error", (error) => {
         console.error("Error retrieving MP3 file:", error);
-        return res.status(400).json({ error: error });
+        return reject("Error retrieving MP3 file");
       });
   });
 };
@@ -192,9 +196,9 @@ app.post("/api/performUserQuery", async (req, res) => {
 app.post("/api/transcribeEpisode", async (req, res) => {
   const { episodeUrl } = req.body;
   console.log(episodeUrl);
-  const tempURL =
-    "https://media.rss.com/digitalfuturestold/2023_03_07_20_45_19_d06c1ad6-ac3f-4f01-93fc-a9a01a7b76f2.mp3";
-  const filePath = await getAudioFromURL(tempURL);
+  //const tempURL = "https://media.rss.com/digitalfuturestold/2023_03_07_20_45_19_d06c1ad6-ac3f-4f01-93fc-a9a01a7b76f2.mp3";
+  const filePath = await getAudioFromURL(episodeUrl);
+  //TODO: make sure we are receiving a valid mp3
   console.log(filePath);
   const transcription = await transcribeAudio(filePath);
 

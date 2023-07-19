@@ -27,38 +27,38 @@ export function QueryForm({ llmReady, handleSetQueryResults }) {
   };
 
   return (
-    <>
-      {llmReady && (
-        <div className="PodcastFormContainer">
-          <Box
-            component="form"
-            sx={{
-              m: 2,
-              display: "flex",
-            }}
-            noValidate
-            autoComplete="off"
-            onSubmit={handleQuerySearch}
-          >
-            <TextField
-              type="text"
-              label="Question"
-              id="query"
-              name="query"
-              size="small"
-              sx={{
-                mr: 2,
-              }}
-              onChange={(e) => {
-                setQuery(e.target.value);
-              }}
-            />
-            <Button type="submit" variant="contained">
-              Submit
-            </Button>
-          </Box>
-        </div>
-      )}
-    </>
+    <div className="PodcastFormContainer">
+      <Box
+        component="form"
+        noValidate
+        autoComplete="off"
+        onSubmit={handleQuerySearch}
+      >
+        <TextField
+          type="text"
+          label="Question"
+          id="query"
+          name="query"
+          size="small"
+          fullWidth
+          sx={{
+            mr: 2,
+          }}
+          onChange={(e) => {
+            setQuery(e.target.value);
+          }}
+        />
+        <Button
+          type="submit"
+          variant="contained"
+          sx={{
+            mt: 2,
+            mb: 2,
+          }}
+        >
+          Submit
+        </Button>
+      </Box>
+    </div>
   );
 }

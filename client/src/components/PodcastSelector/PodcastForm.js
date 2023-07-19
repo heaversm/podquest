@@ -1,13 +1,17 @@
 import Button from "@mui/material/Button";
 import TextField from "@mui/material/TextField";
 import Box from "@mui/material/Box";
-
+import Container from "@mui/material/Container";
 import React from "react";
-export function PodcastForm({ handleSetPodcasts }) {
+export function PodcastForm({ handleSetPodcasts, handleSetStatusMessage }) {
   const [podcastName, setPodcastName] = React.useState("");
 
   const handlePodcastSearch = (e) => {
     e.preventDefault();
+    // handleSetStatusMessage({
+    //   message: "Searching for podcasts...",
+    //   type: "info",
+    // });
     console.log("podcastName", podcastName);
     fetch("/api/searchForPodcast", {
       method: "POST",
@@ -28,13 +32,9 @@ export function PodcastForm({ handleSetPodcasts }) {
   };
 
   return (
-    <div className="podcastFormContainer">
+    <Box className="podcastFormContainer">
       <Box
         component="form"
-        sx={{
-          m: 2,
-          display: "flex",
-        }}
         noValidate
         autoComplete="off"
         onSubmit={handlePodcastSearch}
@@ -46,17 +46,22 @@ export function PodcastForm({ handleSetPodcasts }) {
           id="podcast"
           name="podcast"
           size="small"
-          sx={{
-            mr: 2,
-          }}
+          fullWidth
           onChange={(e) => {
             setPodcastName(e.target.value);
           }}
         />
-        <Button type="submit" variant="contained">
+        <Button
+          type="submit"
+          variant="contained"
+          sx={{
+            mt: 2,
+            mb: 2,
+          }}
+        >
           Submit
         </Button>
       </Box>
-    </div>
+    </Box>
   );
 }

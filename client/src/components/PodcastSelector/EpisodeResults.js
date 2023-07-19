@@ -7,6 +7,7 @@ import FormControl from "@mui/material/FormControl";
 import MenuItem from "@mui/material/MenuItem";
 import Select, { SelectChangeEvent } from "@mui/material/Select";
 import Box from "@mui/material/Box";
+import Container from "@mui/material/Container";
 
 export function EpisodeResults({ episodes, handleSetLLMReady }) {
   const [episode, setEpisode] = React.useState("");
@@ -36,35 +37,26 @@ export function EpisodeResults({ episodes, handleSetLLMReady }) {
   };
 
   return (
-    <>
-      {episodes && episodes.length ? (
-        <Box
-          className="episodesContainer"
-          sx={{
-            display: "flex",
-          }}
+    <Box className="episodesContainer">
+      <FormControl sx={{ mt: 2, minWidth: 80 }} fullWidth>
+        <InputLabel id="selectEpisodeLabel">Select Episode</InputLabel>
+        <Select
+          labelId="selectEpisodeLabel"
+          id="selectEpisode"
+          value={episode}
+          label="Select Episode"
+          onChange={handleEpisodeChange}
+          autoWidth
         >
-          <FormControl sx={{ m: 2, minWidth: 80 }} fullWidth>
-            <InputLabel id="selectEpisodeLabel">Select Episode</InputLabel>
-            <Select
-              labelId="selectEpisodeLabel"
-              id="selectEpisode"
-              value={episode}
-              label="Select Episode"
-              onChange={handleEpisodeChange}
-              autoWidth
-            >
-              {episodes.map((episode) => {
-                return (
-                  <MenuItem key={episode.title} value={episode.url}>
-                    {episode.title}
-                  </MenuItem>
-                );
-              })}
-            </Select>
-          </FormControl>
-        </Box>
-      ) : null}
-    </>
+          {episodes.map((episode) => {
+            return (
+              <MenuItem key={episode.title} value={episode.url}>
+                {episode.title}
+              </MenuItem>
+            );
+          })}
+        </Select>
+      </FormControl>
+    </Box>
   );
 }
