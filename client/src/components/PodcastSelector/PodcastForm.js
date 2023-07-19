@@ -8,10 +8,10 @@ export function PodcastForm({ handleSetPodcasts, handleSetStatusMessage }) {
 
   const handlePodcastSearch = (e) => {
     e.preventDefault();
-    // handleSetStatusMessage({
-    //   message: "Searching for podcasts...",
-    //   type: "info",
-    // });
+    handleSetStatusMessage({
+      message: "Searching for podcasts...",
+      type: "info",
+    });
     console.log("podcastName", podcastName);
     fetch("/api/searchForPodcast", {
       method: "POST",

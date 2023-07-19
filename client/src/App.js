@@ -154,6 +154,7 @@ function App() {
                   <QueryForm
                     llmReady={llmReady}
                     handleSetQueryResults={handleSetQueryResults}
+                    handleSetStatusMessage={handleSetStatusMessage}
                   />
                 </Box>
               )}
@@ -166,13 +167,13 @@ function App() {
             open={true}
             autoHideDuration={6000}
             onClose={handleStatusClose}
-            anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+            anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
           >
             <Alert
               variant="outlined"
               severity={statusMessage.type}
               sx={{ bgcolor: "background.paper" }}
-              onClose={handleStatusClose}
+              // onClose={handleStatusClose}
             >
               {statusMessage.message}
             </Alert>

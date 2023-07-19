@@ -3,12 +3,19 @@ import TextField from "@mui/material/TextField";
 import Box from "@mui/material/Box";
 
 import React from "react";
-export function QueryForm({ llmReady, handleSetQueryResults }) {
+export function QueryForm({
+  llmReady,
+  handleSetQueryResults,
+  handleSetStatusMessage,
+}) {
   const [query, setQuery] = React.useState("");
 
   const handleQuerySearch = (e) => {
     e.preventDefault();
-    console.log("query", query);
+    handleSetStatusMessage({
+      message: "Searching for answers...",
+      type: "info",
+    });
     fetch("/api/performUserQuery", {
       method: "POST",
       headers: {

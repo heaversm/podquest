@@ -200,8 +200,11 @@ app.post("/api/transcribeEpisode", async (req, res) => {
   const filePath = await getAudioFromURL(episodeUrl);
   //TODO: make sure we are receiving a valid mp3
   console.log(filePath);
+  res.write(JSON.stringify({ message: "Audio Received - Transcribing..." }));
   const transcription = await transcribeAudio(filePath);
-
+  res.write(
+    JSON.stringify({ message: "Transcription Created - Creating Embeddings" })
+  );
   const llm = new OpenAI();
 
   fs.unlink(filePath, (err) => {
@@ -219,20 +222,16 @@ app.post("/api/transcribeEpisode", async (req, res) => {
   const output = await splitter.splitDocuments([
     new Document({ pageContent: transcription.text }),
   ]);
-  // console.log(output);
   const vectorStore = await FaissStore.fromDocuments(
     output,
     new OpenAIEmbeddings()
   );
   const retriever = vectorStore.asRetriever();
   // console.log("Retriever created", retriever);
-  // chain = RetrievalQAChain.fromLLM(llm, retriever);
   chain = RetrievalQAChain.fromLLM(llm, retriever);
-  return res.status(200).json({ llmReady: true });
-  // const chainResponse = await chain.call({
-  //   query: "What is this podcast about?",
-  // });
-  // console.log({ chainResponse });
+  // return res.status(200).json({ llmReady: true });
+  res.write(JSON.stringify({ message: "LLM Ready", done: true }));
+  return res.end();
 });
 
 // All other GET requests not handled before will return our React app
