@@ -28,26 +28,8 @@ export function EpisodeResults({
   const handleEpisodeChange = (e) => {
     e.preventDefault();
     const episodeUrl = e.target.value;
-    console.log(episodeUrl);
+    // console.log(episodeUrl);
     setEpisode(episodeUrl);
-
-    // fetch("/api/transcribeEpisode", {
-    //   method: "POST",
-    //   headers: {
-    //     "Content-Type": "application/json",
-    //   },
-    //   body: JSON.stringify({ episodeUrl }),
-    // })
-    //   .then((res) => res.json())
-    //   .then((data) => {
-    //     console.log("data", data);
-    //     if (data.llmReady) {
-    //       handleSetLLMReady(true);
-    //     }
-    //   })
-    //   .catch((err) => {
-    //     console.log("err", err);
-    //   });
 
     fetch("/api/transcribeEpisode", {
       method: "POST",
@@ -65,11 +47,9 @@ export function EpisodeResults({
 
         function read() {
           return reader.read().then((data) => {
-            console.log(data);
-
             const { value, done } = data;
             if (done) {
-              console.log("All responses received");
+              // console.log("All responses received");
               return;
             }
 
@@ -79,7 +59,7 @@ export function EpisodeResults({
             parts.forEach((part) => {
               if (part !== "") {
                 const jsonResponse = JSON.parse(part);
-                console.log(jsonResponse.message);
+                // console.log(jsonResponse.message);
                 handleSetStatusMessage({
                   message: jsonResponse.message,
                   type: "info",
@@ -96,7 +76,7 @@ export function EpisodeResults({
         return read();
       })
       .then(() => {
-        console.log("llm ready");
+        // console.log("llm ready");
         handleSetLLMReady(true);
       })
       .catch((err) => {

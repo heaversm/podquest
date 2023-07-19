@@ -30,6 +30,7 @@ import { EpisodeResults } from "./components/PodcastSelector/EpisodeResults";
 import { QueryForm } from "./components/Query/QueryForm";
 import { QueryResults } from "./components/Query/QueryResults";
 import { PageIntro } from "./components/Header/PageIntro";
+import { ModeSelector } from "./components/Header/ModeSelector";
 
 //colors:
 // https://mui.com/material-ui/customization/color/#color-palette
@@ -54,6 +55,7 @@ function App() {
   const [queryResults, setQueryResults] = useState([]);
   const [llmReady, setLLMReady] = useState(false);
   const [statusMessage, setStatusMessage] = useState(); //e.g message: "Waiting for user input...", type: "info","open: true"
+  const [mode, setMode] = useState(null);
 
   const handleStatusClose = (event, reason) => {
     if (reason === "clickaway") {
@@ -68,12 +70,11 @@ function App() {
   };
 
   const handleSetEpisodes = (episodesList) => {
-    console.log(episodesList);
+    // console.log(episodesList);
     setEpisodes(episodesList);
   };
 
   const handleSetQueryResults = (queryResultsList) => {
-    console.log(queryResultsList);
     setQueryResults(queryResultsList);
   };
 
@@ -85,13 +86,34 @@ function App() {
     setStatusMessage(status);
   };
 
-  // useEffect(() => {
-  //   setStatusMessage({
-  //     message: "Waiting for user input...",
-  //     type: "info",
-  //     open: true,
-  //   });
-  // }, []);
+  const handleSetMode = (mode) => {
+    console.log("mode", mode);
+    setMode(`${mode}`);
+  };
+
+  useEffect(() => {
+    if (statusMessage?.message === "Searching for answers...") {
+      setQueryResults([]);
+    }
+  }, [statusMessage]);
+
+  useEffect(() => {
+    if (podcasts && podcasts.length > 0) {
+      handleSetStatusMessage({
+        message: "Podcasts found",
+        type: "info",
+      });
+    }
+  }, [podcasts]);
+
+  useEffect(() => {
+    if (episodes && episodes.length > 0) {
+      handleSetStatusMessage({
+        message: "Episodes found",
+        type: "info",
+      });
+    }
+  }, [episodes]);
 
   return (
     <ThemeProvider theme={myTheme}>
@@ -105,60 +127,67 @@ function App() {
           }}
         >
           <Container maxWidth="md">
-            <PageIntro />
-            <Box align="center" className="formContainer" sx={{ mt: 8 }}>
-              <Typography
-                component="h4"
-                variant="h5"
-                align="left"
-                color="primary.main"
-                gutterBottom
-                sx={{ mb: 4 }}
-              >
-                Step 1: Find Your Episode
-              </Typography>
-              <PodcastForm
-                handleSetPodcasts={handleSetPodcasts}
-                handleSetStatusMessage={handleSetStatusMessage}
-              />
-              {podcasts.length > 0 && (
-                <PodcastResults
-                  podcasts={podcasts}
-                  handleSetEpisodes={handleSetEpisodes}
-                  handleSetStatusMessage={handleSetStatusMessage}
-                />
-              )}
-              {episodes.length > 0 && (
-                <EpisodeResults
-                  episodes={episodes}
-                  handleSetLLMReady={handleSetLLMReady}
-                  handleSetStatusMessage={handleSetStatusMessage}
-                />
-              )}
-              {llmReady && (
-                <Box sx={{ mt: 8 }}>
-                  <Typography
-                    component="h4"
-                    variant="h5"
-                    align="left"
-                    color="primary.main"
-                    gutterBottom
-                    sx={{ mb: 2 }}
-                  >
-                    Step 2: Get Answers
-                  </Typography>
-                  {queryResults && queryResults.length > 0 && (
-                    <QueryResults queryResults={queryResults} />
-                  )}
+            <PageIntro handleSetMode={handleSetMode} />
+            {!mode ? (
+              <ModeSelector handleSetMode={handleSetMode} />
+            ) : (
+              <Box align="center" className="formContainer" sx={{ mt: 8 }}>
+                {llmReady ? (
+                  <Box sx={{ mt: 8 }}>
+                    <Typography
+                      component="h4"
+                      variant="h5"
+                      align="left"
+                      color="primary.main"
+                      gutterBottom
+                      sx={{ mb: 2 }}
+                    >
+                      Step 2: Get Answers
+                    </Typography>
+                    {queryResults && queryResults.length > 0 && (
+                      <QueryResults queryResults={queryResults} />
+                    )}
 
-                  <QueryForm
-                    llmReady={llmReady}
-                    handleSetQueryResults={handleSetQueryResults}
-                    handleSetStatusMessage={handleSetStatusMessage}
-                  />
-                </Box>
-              )}
-            </Box>
+                    <QueryForm
+                      llmReady={llmReady}
+                      handleSetQueryResults={handleSetQueryResults}
+                      handleSetStatusMessage={handleSetStatusMessage}
+                    />
+                  </Box>
+                ) : (
+                  <>
+                    <Typography
+                      component="h4"
+                      variant="h5"
+                      align="left"
+                      color="primary.main"
+                      gutterBottom
+                      sx={{ mb: 4 }}
+                    >
+                      Step 1: Find Your Episode
+                    </Typography>
+                    <PodcastForm
+                      handleSetPodcasts={handleSetPodcasts}
+                      handleSetStatusMessage={handleSetStatusMessage}
+                    />
+                    {podcasts.length > 0 && (
+                      <PodcastResults
+                        podcasts={podcasts}
+                        handleSetEpisodes={handleSetEpisodes}
+                        handleSetStatusMessage={handleSetStatusMessage}
+                      />
+                    )}
+                    {episodes.length > 0 && (
+                      <EpisodeResults
+                        episodes={episodes}
+                        handleSetLLMReady={handleSetLLMReady}
+                        handleSetStatusMessage={handleSetStatusMessage}
+                      />
+                    )}
+                  </>
+                )}
+              </Box>
+            )}
           </Container>
         </Box>
         {statusMessage && (

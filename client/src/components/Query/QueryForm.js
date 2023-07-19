@@ -25,7 +25,6 @@ export function QueryForm({
     })
       .then((res) => res.json())
       .then((data) => {
-        console.log("data", data);
         handleSetQueryResults(data.text);
       })
       .catch((err) => {

@@ -1,6 +1,6 @@
 import ListItem from "@mui/material/ListItem";
 import Link from "@mui/material/Link";
-import React from "react";
+import React, { useEffect } from "react";
 
 import InputLabel from "@mui/material/InputLabel";
 import FormControl from "@mui/material/FormControl";
@@ -17,10 +17,19 @@ export function PodcastResults({
 }) {
   const [podcast, setPodcast] = React.useState("");
 
+  useEffect(() => {
+    if (podcast && podcast !== "") {
+      handleSetStatusMessage({
+        message: "Searching for episodes...",
+        type: "info",
+      });
+    }
+  }, [podcast]);
+
   const handlePodcastChange = (e) => {
     e.preventDefault();
     const podcastUrl = e.target.value;
-    console.log(podcastUrl);
+    // console.log(podcastUrl);
     setPodcast(podcastUrl);
 
     fetch("/api/searchForEpisodes", {
@@ -32,7 +41,7 @@ export function PodcastResults({
     })
       .then((res) => res.json())
       .then((data) => {
-        console.log("data", data);
+        // console.log("data", data);
         const { mp3s } = data;
         handleSetEpisodes(mp3s);
       })

@@ -15,23 +15,6 @@ import Alert from "@mui/material/Alert";
 
 import { deepPurple, amber, blueGrey } from "@mui/material/colors";
 const colorSubtext = blueGrey[400];
-const cards = [
-  {
-    title: "Summaries & highlights",
-    text: "Get a rundown on all the key topics, links, and points of discussion.",
-    image: "https://source.unsplash.com/random?wallpapers",
-  },
-  {
-    title: "Jump to the good parts",
-    text: "Ask Podquest to take you to the specific spot in the audio where something occurred, without having to scrub endlessly through the timeline to find it.",
-    image: "https://source.unsplash.com/random?wallpapers",
-  },
-  {
-    title: "Test your knowledge",
-    text: "Flip the script and have Podquest ask you questions. Podquest can be used as a study aid or even a classroom tool.",
-    image: "https://source.unsplash.com/random?wallpapers",
-  },
-];
 
 export function PageIntro() {
   return (
@@ -56,52 +39,6 @@ export function PageIntro() {
           Answers to any question about your favorite podcast episodes
         </Typography>
       </Container>
-      <Box
-        sx={{
-          mt: 8,
-        }}
-      >
-        <Typography
-          gutterBottom
-          variant="h4"
-          component="h3"
-          color="primary.main"
-          align="center"
-          sx={{
-            mb: 4,
-          }}
-        >
-          Use Cases
-        </Typography>
-        <Grid container spacing={4}>
-          {cards.map((card, index) => (
-            <Grid item key={`card${index}`} xs={12} sm={6} md={4}>
-              <Card
-                sx={{
-                  height: "100%",
-                  display: "flex",
-                  flexDirection: "column",
-                }}
-              >
-                <CardMedia
-                  component="div"
-                  sx={{
-                    // 16:9
-                    pt: "56.25%",
-                  }}
-                  image={card.image}
-                />
-                <CardContent sx={{ flexGrow: 1 }}>
-                  <Typography gutterBottom variant="h5" component="h5">
-                    {card.title}
-                  </Typography>
-                  <Typography>{card.text}</Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-          ))}
-        </Grid>
-      </Box>
     </>
   );
 }

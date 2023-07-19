@@ -12,7 +12,7 @@ export function PodcastForm({ handleSetPodcasts, handleSetStatusMessage }) {
       message: "Searching for podcasts...",
       type: "info",
     });
-    console.log("podcastName", podcastName);
+    // console.log("podcastName", podcastName);
     fetch("/api/searchForPodcast", {
       method: "POST",
       headers: {
@@ -22,7 +22,7 @@ export function PodcastForm({ handleSetPodcasts, handleSetStatusMessage }) {
     })
       .then((res) => res.json())
       .then((data) => {
-        console.log("data", data);
+        // console.log("data", data);
         const { podcasts } = data;
         handleSetPodcasts(podcasts);
       })
