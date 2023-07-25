@@ -13,6 +13,7 @@ export function EpisodeResults({
   episodes,
   handleSetLLMReady,
   handleSetStatusMessage,
+  mode,
 }) {
   const [episode, setEpisode] = React.useState("");
 
@@ -28,7 +29,7 @@ export function EpisodeResults({
   const handleEpisodeChange = (e) => {
     e.preventDefault();
     const episodeUrl = e.target.value;
-    // console.log(episodeUrl);
+    console.log(episodeUrl);
     setEpisode(episodeUrl);
 
     fetch("/api/transcribeEpisode", {
@@ -36,7 +37,7 @@ export function EpisodeResults({
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ episodeUrl }),
+      body: JSON.stringify({ episodeUrl, mode }),
     })
       .then(async (res) => {
         // console.log("res", res);

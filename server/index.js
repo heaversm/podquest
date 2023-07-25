@@ -28,14 +28,22 @@ const configuration = new Configuration({
 });
 const openai = new OpenAIApi(configuration);
 
-let chain;
+let chain; //will hold the llm and retriever
+let transcription; //will hold the transcription from openai
 
 //llm
 import { OpenAI } from "langchain/llms/openai";
 
-const transcribeAudio = async (filePath) => {
-  const transcription = await openai
-    .createTranscription(fs.createReadStream(filePath), "whisper-1")
+const transcribeAudio = async (filePath, mode) => {
+  const transcriptionFormat = mode === "audio" ? "srt" : "text";
+
+  const transcript = await openai
+    .createTranscription(
+      fs.createReadStream(filePath),
+      "whisper-1",
+      "", //prompt, unused
+      transcriptionFormat
+    )
     .then((response) => {
       console.log(response.data);
       return response.data;
@@ -43,7 +51,7 @@ const transcribeAudio = async (filePath) => {
     .catch((err) => {
       console.log(err);
     });
-  return transcription;
+  return transcript;
 };
 
 const PORT = process.env.PORT || 3001;
@@ -194,14 +202,14 @@ app.post("/api/performUserQuery", async (req, res) => {
 });
 
 app.post("/api/transcribeEpisode", async (req, res) => {
-  const { episodeUrl } = req.body;
-  console.log(episodeUrl);
-  //const tempURL = "https://media.rss.com/digitalfuturestold/2023_03_07_20_45_19_d06c1ad6-ac3f-4f01-93fc-a9a01a7b76f2.mp3";
+  const { episodeUrl, mode } = req.body;
+  console.log(episodeUrl, mode);
+
   const filePath = await getAudioFromURL(episodeUrl);
   //TODO: make sure we are receiving a valid mp3
   console.log(filePath);
   res.write(JSON.stringify({ message: "Audio Received - Transcribing..." }));
-  const transcription = await transcribeAudio(filePath);
+  transcription = await transcribeAudio(filePath, mode);
   res.write(
     JSON.stringify({ message: "Transcription Created - Creating Embeddings" })
   );
@@ -220,7 +228,8 @@ app.post("/api/transcribeEpisode", async (req, res) => {
   });
 
   const output = await splitter.splitDocuments([
-    new Document({ pageContent: transcription.text }),
+    // new Document({ pageContent: transcription.text }),
+    new Document({ pageContent: transcription }),
   ]);
   const vectorStore = await FaissStore.fromDocuments(
     output,
@@ -230,7 +239,8 @@ app.post("/api/transcribeEpisode", async (req, res) => {
   // console.log("Retriever created", retriever);
   chain = RetrievalQAChain.fromLLM(llm, retriever);
   // return res.status(200).json({ llmReady: true });
-  res.write(JSON.stringify({ message: "LLM Ready", done: true }));
+
+  res.write(JSON.stringify({ message: "LLM Ready", done: true, mode: mode }));
   return res.end();
 });
 

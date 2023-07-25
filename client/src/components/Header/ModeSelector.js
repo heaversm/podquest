@@ -20,16 +20,19 @@ const cards = [
     title: "Questions and highlights",
     text: "Get answers to your questions, or get a rundown on key topics, links, and points of discussion.",
     image: "/tile-qa.jpg",
+    id: "qa",
   },
   {
     title: "Jump to the good parts",
     text: "Ask Podquest to take you to the specific spot in the audio where something occurred, without having to scrub endlessly through the timeline to find it.",
     image: "/tile-skip.jpg",
+    id: "audio",
   },
   {
     title: "Test your knowledge",
     text: "Flip the script and have Podquest ask you questions to see what you remember. Podquest can be used as a study aid or even a classroom tool.",
     image: "/tile-test.jpg",
+    id: "quiz",
   },
 ];
 
@@ -85,7 +88,7 @@ export function ModeSelector({ handleSetMode }) {
                       mt: "auto",
                     }}
                     onClick={() => {
-                      handleSetMode(index);
+                      handleSetMode(card.id);
                     }}
                   >
                     Select

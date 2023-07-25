@@ -55,7 +55,7 @@ function App() {
   const [queryResults, setQueryResults] = useState([]);
   const [llmReady, setLLMReady] = useState(false);
   const [statusMessage, setStatusMessage] = useState(); //e.g message: "Waiting for user input...", type: "info","open: true"
-  const [mode, setMode] = useState(null);
+  const [mode, setMode] = useState(null); //qa, audio, or quiz
 
   const handleStatusClose = (event, reason) => {
     if (reason === "clickaway") {
@@ -180,6 +180,7 @@ function App() {
                     {episodes.length > 0 && (
                       <EpisodeResults
                         episodes={episodes}
+                        mode={mode}
                         handleSetLLMReady={handleSetLLMReady}
                         handleSetStatusMessage={handleSetStatusMessage}
                       />
