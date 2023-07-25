@@ -56,6 +56,7 @@ function App() {
   const [llmReady, setLLMReady] = useState(false);
   const [statusMessage, setStatusMessage] = useState(); //e.g message: "Waiting for user input...", type: "info","open: true"
   const [mode, setMode] = useState(null); //qa, audio, or quiz
+  const [filePath, setFilePath] = useState(null); //path to audio file on server
 
   const handleStatusClose = (event, reason) => {
     if (reason === "clickaway") {
@@ -87,8 +88,11 @@ function App() {
   };
 
   const handleSetMode = (mode) => {
-    console.log("mode", mode);
     setMode(`${mode}`);
+  };
+
+  const handleSetFilePath = (path) => {
+    setFilePath(path);
   };
 
   useEffect(() => {
@@ -183,6 +187,7 @@ function App() {
                         mode={mode}
                         handleSetLLMReady={handleSetLLMReady}
                         handleSetStatusMessage={handleSetStatusMessage}
+                        handleSetFilePath={handleSetFilePath}
                       />
                     )}
                   </>
@@ -191,6 +196,13 @@ function App() {
             )}
           </Container>
         </Box>
+        {mode === "audio" && llmReady && filePath && (
+          <Container>
+            <audio id="audioPlayer" controls src={filePath}>
+              Your browser does not support the audio element.
+            </audio>
+          </Container>
+        )}
         {statusMessage && (
           <Snackbar
             className="statusContainer"

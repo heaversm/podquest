@@ -191,6 +191,30 @@ const getAudioFromURL = async (url) => {
   });
 };
 
+app.get("/playAudio", (req, res) => {
+  const filePath = req.body;
+
+  // Check if the file exists
+  fs.access(filePath, fs.constants.R_OK, (err) => {
+    if (err) {
+      console.error("Error accessing the audio file:", err);
+      return res.status(404).send("Audio file not found");
+    }
+
+    // Set appropriate headers for streaming the audio
+    res.set({
+      "Content-Type": "audio/mpeg", // Adjust the content type based on your audio file format
+      "Content-Length": fs.statSync(filePath).size,
+    });
+
+    // Create a read stream to read the audio file
+    const audioStream = fs.createReadStream(filePath);
+
+    // Pipe the audio stream to the response stream
+    audioStream.pipe(res);
+  });
+});
+
 app.post("/api/performUserQuery", async (req, res) => {
   const { query } = req.body;
   // console.log(query);
@@ -215,6 +239,7 @@ app.post("/api/transcribeEpisode", async (req, res) => {
   );
   const llm = new OpenAI();
 
+  // if (mode !== "audio") {
   fs.unlink(filePath, (err) => {
     if (err) {
       console.error(err);

@@ -13,16 +13,19 @@ export function EpisodeResults({
   episodes,
   handleSetLLMReady,
   handleSetStatusMessage,
+  handleSetFilePath,
   mode,
 }) {
   const [episode, setEpisode] = React.useState("");
 
   useEffect(() => {
     if (episode && episode !== "") {
-      handleSetStatusMessage({
-        message: "Retrieving audio from episode...",
-        type: "info",
-      });
+      // handleSetStatusMessage({
+      //   message: "Retrieving audio from episode...",
+      //   type: "info",
+      // });
+
+      handleSetFilePath(episode);
     }
   }, [episode]);
 
