@@ -4,7 +4,7 @@ import "@fontsource/roboto/400.css";
 import "@fontsource/roboto/500.css";
 import "@fontsource/roboto/700.css";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import Button from "@mui/material/Button";
 import Card from "@mui/material/Card";
 import CardActions from "@mui/material/CardActions";
@@ -57,6 +57,7 @@ function App() {
   const [statusMessage, setStatusMessage] = useState(); //e.g message: "Waiting for user input...", type: "info","open: true"
   const [mode, setMode] = useState(null); //qa, audio, or quiz
   const [filePath, setFilePath] = useState(null); //path to audio file on server
+  const [timeStamp, setTimestamp] = useState(null); //timestamp of audio file
 
   const handleStatusClose = (event, reason) => {
     if (reason === "clickaway") {
@@ -118,6 +119,46 @@ function App() {
       });
     }
   }, [episodes]);
+
+  const parseTimestampToSeconds = (timestamp) => {
+    // Timestamp format: "hh:mm:ss,SSS"
+    const [hours, minutes, seconds] = timestamp.split(":").map(parseFloat);
+    return hours * 3600 + minutes * 60 + seconds;
+  };
+
+  const timestampRegex = /\d{2}:\d{2}:\d{2},\d{3}/;
+
+  const searchForTimestamp = (queryResults) => {
+    // Search for the first match in the text
+    const firstTimestampMatch = queryResults.match(timestampRegex);
+
+    // Extract the first timestamp or handle the case when no timestamp is found
+    const firstTimestamp = firstTimestampMatch ? firstTimestampMatch[0] : null;
+    return firstTimestamp;
+  };
+
+  const audioRef = useRef(null);
+
+  useEffect(() => {
+    if (mode === "audio" && queryResults.length > 0) {
+      //tell audio player to go to timestamp queryResults.timestamp
+      const timeStampMatch = searchForTimestamp(queryResults);
+      if (timeStampMatch) {
+        const jumpTime = parseTimestampToSeconds(timeStampMatch);
+        setTimestamp(jumpTime);
+      }
+    }
+  }, [queryResults]);
+
+  useEffect(() => {
+    if (timeStamp !== null && audioRef.current) {
+      audioRef.current.currentTime = timeStamp;
+      setStatusMessage({
+        message: `Moving audio to ${timeStamp} seconds`,
+        type: "success",
+      });
+    }
+  }, [timeStamp]);
 
   return (
     <ThemeProvider theme={myTheme}>
@@ -197,10 +238,15 @@ function App() {
           </Container>
         </Box>
         {mode === "audio" && llmReady && filePath && (
-          <Container>
-            <audio id="audioPlayer" controls src={filePath}>
-              Your browser does not support the audio element.
-            </audio>
+          <Container maxWidth="md">
+            <Box
+              maxWidth="md"
+              sx={{ display: "flex", justifyContent: "center" }}
+            >
+              <audio ref={audioRef} id="audioPlayer" controls src={filePath}>
+                Your browser does not support the audio element.
+              </audio>
+            </Box>
           </Container>
         )}
         {statusMessage && (
