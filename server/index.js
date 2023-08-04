@@ -23,6 +23,8 @@ import { FaissStore } from "langchain/vectorstores/faiss";
 import { OpenAIEmbeddings } from "langchain/embeddings/openai";
 import { RetrievalQAChain } from "langchain/chains";
 
+const LOAD_TRANSCRIPT_FROM_FILE = true;
+
 const configuration = new Configuration({
   apiKey: process.env.OPENAI_API_KEY,
 });
@@ -35,23 +37,31 @@ let transcription; //will hold the transcription from openai
 import { OpenAI } from "langchain/llms/openai";
 
 const transcribeAudio = async (filePath, mode) => {
-  const transcriptionFormat = mode === "audio" ? "srt" : "text";
+  if (LOAD_TRANSCRIPT_FROM_FILE) {
+    const transcription = fs.readFileSync(
+      path.join(__dirname, "transcript.vtt"),
+      "utf8"
+    );
+    return transcription;
+  } else {
+    const transcriptionFormat = mode === "audio" ? "srt" : "text";
 
-  const transcript = await openai
-    .createTranscription(
-      fs.createReadStream(filePath),
-      "whisper-1",
-      "", //prompt, unused
-      transcriptionFormat
-    )
-    .then((response) => {
-      console.log(response.data);
-      return response.data;
-    })
-    .catch((err) => {
-      console.log(err);
-    });
-  return transcript;
+    const transcript = await openai
+      .createTranscription(
+        fs.createReadStream(filePath),
+        "whisper-1",
+        "", //prompt, unused
+        transcriptionFormat
+      )
+      .then((response) => {
+        console.log(response.data);
+        return response.data;
+      })
+      .catch((err) => {
+        console.log(err);
+      });
+    return transcript;
+  }
 };
 
 const PORT = process.env.PORT || 3001;
