@@ -1,12 +1,15 @@
 import Button from "@mui/material/Button";
 import TextField from "@mui/material/TextField";
 import Box from "@mui/material/Box";
+import Typography from "@mui/material/Typography";
 
 import React from "react";
 export function QueryForm({
   llmReady,
   handleSetQueryResults,
   handleSetStatusMessage,
+  quizQuestion,
+  mode,
 }) {
   const [query, setQuery] = React.useState("");
 
@@ -40,9 +43,21 @@ export function QueryForm({
         autoComplete="off"
         onSubmit={handleQuerySearch}
       >
+        {quizQuestion && mode === "quiz" && (
+          <Typography
+            component="h5"
+            variant="h6"
+            align="left"
+            color="primary.main"
+            gutterBottom
+            sx={{ mb: 2 }}
+          >
+            {quizQuestion}
+          </Typography>
+        )}
         <TextField
           type="text"
-          label="Question"
+          label="Input"
           id="query"
           name="query"
           size="small"

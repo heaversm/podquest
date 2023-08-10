@@ -14,6 +14,7 @@ export function EpisodeResults({
   handleSetLLMReady,
   handleSetStatusMessage,
   handleSetFilePath,
+  handleSetQuizQuestions,
   mode,
 }) {
   const [episode, setEpisode] = React.useState("");
@@ -63,11 +64,18 @@ export function EpisodeResults({
             parts.forEach((part) => {
               if (part !== "") {
                 const jsonResponse = JSON.parse(part);
+                console.log(jsonResponse);
                 // console.log(jsonResponse.message);
                 handleSetStatusMessage({
                   message: jsonResponse.message,
                   type: "info",
                 });
+
+                if (jsonResponse.quizQuestions) {
+                  console.log(jsonResponse.quizQuestions);
+                  //MH TODO: wait until llm ready?
+                  handleSetQuizQuestions(jsonResponse.quizQuestions);
+                }
               }
             });
 
@@ -80,7 +88,7 @@ export function EpisodeResults({
         return read();
       })
       .then(() => {
-        // console.log("llm ready");
+        console.log("llm ready");
         handleSetLLMReady(true);
       })
       .catch((err) => {

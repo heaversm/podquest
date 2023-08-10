@@ -21,9 +21,11 @@ import {
 import { Document } from "langchain/document";
 import { FaissStore } from "langchain/vectorstores/faiss";
 import { OpenAIEmbeddings } from "langchain/embeddings/openai";
-import { RetrievalQAChain } from "langchain/chains";
+import { RetrievalQAChain, loadSummarizationChain } from "langchain/chains";
 
-const LOAD_TRANSCRIPT_FROM_FILE = true;
+const LOAD_TRANSCRIPT_FROM_FILE = false; //MH TODO: currently loads text, but llm doesn't like this unless it has been formally called by langchain createTranscription
+const LOAD_AUDIO_FROM_FILE = true;
+const MAX_EPISODES = 10;
 
 const configuration = new Configuration({
   apiKey: process.env.OPENAI_API_KEY,
@@ -31,22 +33,27 @@ const configuration = new Configuration({
 const openai = new OpenAIApi(configuration);
 
 let chain; //will hold the llm and retriever
+let summarizer; //will hold the summarization chain
 let transcription; //will hold the transcription from openai
+let quizQuestions;
 
 //llm
 import { OpenAI } from "langchain/llms/openai";
 
 const transcribeAudio = async (filePath, mode) => {
+  let transcript;
   if (LOAD_TRANSCRIPT_FROM_FILE) {
-    const transcription = fs.readFileSync(
-      path.join(__dirname, "transcript.vtt"),
+    transcript = fs.readFileSync(
+      path.join(__dirname, "../", "transcript_w_timestamps.txt"),
       "utf8"
     );
-    return transcription;
+    // console.log(transcript, "transcription");
+    return transcript;
+    // return JSON.stringify(transcript);
   } else {
     const transcriptionFormat = mode === "audio" ? "srt" : "text";
 
-    const transcript = await openai
+    transcript = await openai
       .createTranscription(
         fs.createReadStream(filePath),
         "whisper-1",
@@ -144,9 +151,7 @@ app.post("/api/searchForEpisodes", async (req, res) => {
     },
   };
 
-  const url =
-    "https://api.podcastindex.org/api/1.0/episodes/byfeedurl?max=2&url=" +
-    podcastUrl;
+  const url = `https://api.podcastindex.org/api/1.0/episodes/byfeedurl?max=${MAX_EPISODES}&url=${podcastUrl}`;
   await axios.get(url, options).then((response) => {
     // console.log(response.data);
     if (response.data?.items?.length > 0) {
@@ -201,6 +206,14 @@ const getAudioFromURL = async (url) => {
   });
 };
 
+app.get("/api/getQuizQuestions", async (req, res) => {
+  if (quizQuestions && quizQuestions.length > 0) {
+    return res.status(200).json({ quizQuestions: quizQuestions });
+  } else {
+    return res.status(404).json({ error: "No quiz questions found" });
+  }
+});
+
 app.get("/playAudio", (req, res) => {
   const filePath = req.body;
 
@@ -226,36 +239,42 @@ app.get("/playAudio", (req, res) => {
 });
 
 app.post("/api/performUserQuery", async (req, res) => {
-  const { query } = req.body;
-  // console.log(query);
+  const { query, mode } = req.body;
+  console.log(query, mode);
   const chainResponse = await chain.call({
     query: query,
   });
-  console.log({ chainResponse });
   return res.status(200).json({ text: chainResponse.text });
 });
 
 app.post("/api/transcribeEpisode", async (req, res) => {
   const { episodeUrl, mode } = req.body;
   console.log(episodeUrl, mode);
+  let filePath;
+  if (LOAD_AUDIO_FROM_FILE) {
+    filePath = path.join(__dirname, "../audio.mp3");
+  } else {
+    filePath = await getAudioFromURL(episodeUrl);
+  }
 
-  const filePath = await getAudioFromURL(episodeUrl);
   //TODO: make sure we are receiving a valid mp3
-  console.log(filePath);
   res.write(JSON.stringify({ message: "Audio Received - Transcribing..." }));
   transcription = await transcribeAudio(filePath, mode);
+  // console.log("transcription2", transcription);
   res.write(
     JSON.stringify({ message: "Transcription Created - Creating Embeddings" })
   );
   const llm = new OpenAI();
 
   // if (mode !== "audio") {
-  fs.unlink(filePath, (err) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).json({ error: err });
-    }
-  });
+  if (!LOAD_AUDIO_FROM_FILE) {
+    fs.unlink(filePath, (err) => {
+      if (err) {
+        console.error(err);
+        return res.status(500).json({ error: err });
+      }
+    });
+  }
 
   const splitter = new RecursiveCharacterTextSplitter({
     chunkSize: 256,
@@ -263,19 +282,52 @@ app.post("/api/transcribeEpisode", async (req, res) => {
   });
 
   const output = await splitter.splitDocuments([
-    // new Document({ pageContent: transcription.text }),
     new Document({ pageContent: transcription }),
   ]);
+  // console.log("output", output);
   const vectorStore = await FaissStore.fromDocuments(
     output,
     new OpenAIEmbeddings()
   );
-  const retriever = vectorStore.asRetriever();
-  // console.log("Retriever created", retriever);
-  chain = RetrievalQAChain.fromLLM(llm, retriever);
-  // return res.status(200).json({ llmReady: true });
 
-  res.write(JSON.stringify({ message: "LLM Ready", done: true, mode: mode }));
+  const retriever = vectorStore.asRetriever();
+  chain = RetrievalQAChain.fromLLM(llm, retriever);
+
+  if (mode === "quiz") {
+    summarizer = loadSummarizationChain(llm, { type: "map_reduce" }); //stuff, map_reduce, refine
+    const summary = await summarizer.call({
+      input_documents: output,
+    });
+    console.log("summary", summary);
+    res.write(JSON.stringify({ message: "Generating quiz questions" }));
+    const quizQuestionsResponse = await chain.call({
+      query:
+        "what are 10 questions you could ask a student about the podcast to see if they understood and learned from what they had heard?",
+    });
+    console.log("quizQuestions", quizQuestionsResponse.text);
+    if (quizQuestionsResponse?.text) {
+      const inputText = quizQuestionsResponse.text;
+      const lines = inputText.split("\n");
+      if (lines.length > 0) {
+        const questions = lines
+          .map((line) => line.trim()) // Remove leading/trailing whitespace
+          .filter((line) => line.length > 0) // Filter out empty lines
+          .filter((line) => /^\d+\.\s/.test(line)) // Filter lines that start with a number and a period
+          .map((line) => line.replace(/^\d+\.\s/, "")); // Remove the numbering
+        if (questions.length > 0) {
+          quizQuestions = questions;
+        }
+      }
+    }
+  }
+  res.write(
+    JSON.stringify({
+      message: "LLM Ready",
+      done: true,
+      mode: mode,
+      quizQuestions: quizQuestions,
+    })
+  );
   return res.end();
 });
 

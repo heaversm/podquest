@@ -53,11 +53,15 @@ function App() {
   const [podcasts, setPodcasts] = useState([]);
   const [episodes, setEpisodes] = useState([]);
   const [queryResults, setQueryResults] = useState([]);
+  const [quizQuestions, setQuizQuestions] = useState([]);
   const [llmReady, setLLMReady] = useState(false);
   const [statusMessage, setStatusMessage] = useState(); //e.g message: "Waiting for user input...", type: "info","open: true"
   const [mode, setMode] = useState(null); //qa, audio, or quiz
   const [filePath, setFilePath] = useState(null); //path to audio file on server
   const [timeStamp, setTimestamp] = useState(null); //timestamp of audio file
+  const [quizQuestion, setCurQuizQuestion] = useState(null); //current quiz question
+
+  const prevQueryResults = useRef([]);
 
   const handleStatusClose = (event, reason) => {
     if (reason === "clickaway") {
@@ -96,6 +100,11 @@ function App() {
     setFilePath(path);
   };
 
+  const handleSetQuizQuestions = (questions) => {
+    console.log("setting quiz questions", questions);
+    setQuizQuestions(questions);
+  };
+
   useEffect(() => {
     if (statusMessage?.message === "Searching for answers...") {
       setQueryResults([]);
@@ -120,6 +129,33 @@ function App() {
     }
   }, [episodes]);
 
+  useEffect(() => {
+    console.log("app llm ready", llmReady);
+  }, [llmReady]);
+
+  useEffect(() => {
+    console.log("quizQuestions", quizQuestions);
+    if (quizQuestions.length > 0) {
+      console.log("Picking random quiz question");
+      const curQuizQuestion = pickRandomQuizQuestion();
+      setCurQuizQuestion(curQuizQuestion);
+    }
+  }, [quizQuestions]);
+
+  // useEffect(() => {
+  //   console.log("quizQuestion", quizQuestion);
+  //   if (quizQuestion !== null) {
+  //     setQueryResults([quizQuestion]); //not implementing
+  //   }
+  // }, [quizQuestion]);
+
+  const pickRandomQuizQuestion = () => {
+    const randomQuizQuestion =
+      quizQuestions[Math.floor(Math.random() * quizQuestions.length)];
+    console.log("randomQuizQuestion", randomQuizQuestion);
+    return randomQuizQuestion;
+  };
+
   const parseTimestampToSeconds = (timestamp) => {
     // Timestamp format: "hh:mm:ss,SSS"
     const [hours, minutes, seconds] = timestamp.split(":").map(parseFloat);
@@ -137,6 +173,19 @@ function App() {
     return firstTimestamp;
   };
 
+  const fetchQuizQuestions = async () => {
+    console.log("fetch quiz questions");
+    const response = await fetch("/api/process-questions", {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+    const data = await response.json();
+    console.log(data);
+    return data.quizQuestions;
+  };
+
   const audioRef = useRef(null);
 
   useEffect(() => {
@@ -147,6 +196,9 @@ function App() {
         const jumpTime = parseTimestampToSeconds(timeStampMatch);
         setTimestamp(jumpTime);
       }
+    } else if (mode === "quiz") {
+      const curQuizQuestion = pickRandomQuizQuestion();
+      setCurQuizQuestion(curQuizQuestion);
     }
   }, [queryResults]);
 
@@ -179,24 +231,41 @@ function App() {
               <Box align="center" className="formContainer" sx={{ mt: 8 }}>
                 {llmReady ? (
                   <Box sx={{ mt: 8 }}>
-                    <Typography
-                      component="h4"
-                      variant="h5"
-                      align="left"
-                      color="primary.main"
-                      gutterBottom
-                      sx={{ mb: 2 }}
-                    >
-                      Step 2: Get Answers
-                    </Typography>
+                    {mode === "quiz" && quizQuestion ? (
+                      <>
+                        <Typography
+                          component="h4"
+                          variant="h5"
+                          align="left"
+                          color="primary.main"
+                          gutterBottom
+                          sx={{ mb: 2 }}
+                        >
+                          Step 2: Answer Questions
+                        </Typography>
+                      </>
+                    ) : (
+                      <Typography
+                        component="h4"
+                        variant="h5"
+                        align="left"
+                        color="primary.main"
+                        gutterBottom
+                        sx={{ mb: 2 }}
+                      >
+                        Step 2: Get Answers
+                      </Typography>
+                    )}
+
                     {queryResults && queryResults.length > 0 && (
                       <QueryResults queryResults={queryResults} />
                     )}
-
                     <QueryForm
                       llmReady={llmReady}
                       handleSetQueryResults={handleSetQueryResults}
                       handleSetStatusMessage={handleSetStatusMessage}
+                      quizQuestion={quizQuestion}
+                      mode={mode}
                     />
                   </Box>
                 ) : (
@@ -229,6 +298,7 @@ function App() {
                         handleSetLLMReady={handleSetLLMReady}
                         handleSetStatusMessage={handleSetStatusMessage}
                         handleSetFilePath={handleSetFilePath}
+                        handleSetQuizQuestions={handleSetQuizQuestions}
                       />
                     )}
                   </>
