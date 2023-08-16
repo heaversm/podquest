@@ -24,7 +24,7 @@ import { OpenAIEmbeddings } from "langchain/embeddings/openai";
 import { RetrievalQAChain, loadSummarizationChain } from "langchain/chains";
 
 const LOAD_TRANSCRIPT_FROM_FILE = false; //MH TODO: currently loads text, but llm doesn't like this unless it has been formally called by langchain createTranscription
-const LOAD_AUDIO_FROM_FILE = true;
+const LOAD_AUDIO_FROM_FILE = false;
 const MAX_EPISODES = 10;
 
 const configuration = new Configuration({
@@ -52,7 +52,7 @@ const transcribeAudio = async (filePath, mode) => {
     // return JSON.stringify(transcript);
   } else {
     const transcriptionFormat = mode === "audio" ? "srt" : "text";
-
+    console.log("filePath", filePath);
     transcript = await openai
       .createTranscription(
         fs.createReadStream(filePath),
@@ -178,6 +178,31 @@ const getAudioFromURL = async (url) => {
   return new Promise((resolve, reject) => {
     https
       .get(url, (response) => {
+        // console.log("status", response.statusCode);
+        console.log("status", response.statusCode);
+        if (response.statusCode === 302) {
+          if (url.includes("megaphone")) {
+            console.log("url", url);
+            const startIndex =
+              url.indexOf("megaphone.fm/") + "megaphone.fm/".length;
+            const endIndex = url.indexOf("?");
+            const mp3Component = url.substring(startIndex, endIndex);
+            console.log(
+              "start",
+              startIndex,
+              "end",
+              endIndex,
+              "mp3Component",
+              mp3Component
+            );
+            const newURL = `https://dcs.megaphone.fm/${mp3Component}`;
+            //TODO: need to stop current function execution and re-call this function with the newURL
+            console.log("newURL", newURL);
+            return getAudioFromURL(newURL)
+              .then(resolve) // Continue resolving the original promise
+              .catch(reject); // Pass any potential errors up the chain
+          }
+        }
         if (response.statusCode === 200) {
           const chunks = [];
 
@@ -186,6 +211,7 @@ const getAudioFromURL = async (url) => {
           });
 
           response.on("end", () => {
+            console.log("end");
             const chunkedBuffer = Buffer.concat(chunks);
             const fileID = uuidv4();
             const fileName = `${fileID}.mp3`;
@@ -203,6 +229,8 @@ const getAudioFromURL = async (url) => {
         console.error("Error retrieving MP3 file:", error);
         return reject("Error retrieving MP3 file");
       });
+  }).catch((error) => {
+    console.error("Unhandled rejection:", error);
   });
 };
 
@@ -241,19 +269,74 @@ app.get("/playAudio", (req, res) => {
 app.post("/api/performUserQuery", async (req, res) => {
   const { query, mode } = req.body;
   console.log(query, mode);
+  let isCorrect = null;
+
   const chainResponse = await chain.call({
     query: query,
   });
-  return res.status(200).json({ text: chainResponse.text });
+
+  if (mode === "quiz") {
+    const chainResponseText = chainResponse.text
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-zA-Z ]/g, "");
+    console.log("chainResponseText", chainResponseText);
+
+    let yesIndex, noIndex;
+    //look for word yes in chain response text and parse it out...
+    yesIndex = chainResponseText.indexOf("yes");
+    console.log("yesIndex", yesIndex);
+    if (yesIndex === -1) {
+      noIndex = chainResponseText.indexOf("no");
+      if (noIndex === -1) {
+        //perform sentiment analysis to determine positivity / negativity
+        const sentimentResponse = await chain.call({
+          query: `Analyze the sentiment of the following text: ${chainResponse.text}. Respond with only "positive" or "negative"`,
+        });
+        //convert sentimentResponse.text to a lowercase string:
+        let sentimentResponseText = sentimentResponse.text.trim();
+        sentimentResponseText.replace(/[^a-zA-Z ]/g, "");
+        sentimentResponseText = sentimentResponseText.toLowerCase();
+
+        console.log("sentimentResponse", sentimentResponseText);
+
+        if (sentimentResponseText == "positive") {
+          console.log("true");
+          isCorrect = true;
+        } else {
+          console.log("false");
+          isCorrect = false;
+        }
+      } else {
+        isCorrect = false;
+      }
+    } else {
+      isCorrect = true;
+    }
+    console.log("isCorrect", isCorrect);
+  }
+
+  return res
+    .status(200)
+    .json({ text: chainResponse.text, isCorrect: isCorrect });
 });
+
+function removeQueryParams(origURL) {
+  const url = new URL(origURL);
+  console.log("rqp", url);
+  const nonParamURL = url.origin + url.pathname;
+  return nonParamURL;
+}
 
 app.post("/api/transcribeEpisode", async (req, res) => {
   const { episodeUrl, mode } = req.body;
-  console.log(episodeUrl, mode);
+  console.log(episodeUrl, "episodeURL");
   let filePath;
   if (LOAD_AUDIO_FROM_FILE) {
     filePath = path.join(__dirname, "../audio.mp3");
   } else {
+    //const nonParamURL = removeQueryParams(episodeUrl);
+    //console.log(nonParamURL, "nonParamURL");
     filePath = await getAudioFromURL(episodeUrl);
   }
 

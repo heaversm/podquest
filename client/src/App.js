@@ -61,8 +61,6 @@ function App() {
   const [timeStamp, setTimestamp] = useState(null); //timestamp of audio file
   const [quizQuestion, setCurQuizQuestion] = useState(null); //current quiz question
 
-  const prevQueryResults = useRef([]);
-
   const handleStatusClose = (event, reason) => {
     if (reason === "clickaway") {
       return;

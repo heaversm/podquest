@@ -65,9 +65,9 @@ export function PodcastResults({
           onChange={handlePodcastChange}
           autoWidth
         >
-          {podcasts.map((podcast) => {
+          {podcasts.map((podcast, index) => {
             return (
-              <MenuItem key={podcast.title} value={podcast.url}>
+              <MenuItem key={`PodcastItem${index}`} value={podcast.url}>
                 {podcast.title}
               </MenuItem>
             );

@@ -3,7 +3,7 @@ import TextField from "@mui/material/TextField";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 
-import React from "react";
+import React, { useState } from "react";
 export function QueryForm({
   llmReady,
   handleSetQueryResults,
@@ -12,6 +12,7 @@ export function QueryForm({
   mode,
 }) {
   const [query, setQuery] = React.useState("");
+  const [totalPoints, setTotalPoints] = useState(0); //current quiz question
 
   const handleQuerySearch = (e) => {
     e.preventDefault();
@@ -24,10 +25,21 @@ export function QueryForm({
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ query }),
+      body: JSON.stringify({ query, mode }),
     })
       .then((res) => res.json())
       .then((data) => {
+        if (mode === "quiz") {
+          console.log("isCorrect?", data.isCorrect ? "true" : "false");
+          if (data.isCorrect) {
+            let curPoints = totalPoints;
+            setTotalPoints((curPoints += 1));
+            handleSetStatusMessage({
+              message: data.isCorrect ? "Correct!" : "Incorrect!",
+              type: data.isCorrect ? "success" : "error",
+            });
+          }
+        }
         handleSetQueryResults(data.text);
       })
       .catch((err) => {
@@ -79,6 +91,7 @@ export function QueryForm({
         >
           Submit
         </Button>
+        {totalPoints !== null && <Typography>Points: {totalPoints}</Typography>}
       </Box>
     </div>
   );

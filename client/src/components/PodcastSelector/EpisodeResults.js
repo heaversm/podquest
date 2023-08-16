@@ -108,9 +108,9 @@ export function EpisodeResults({
           onChange={handleEpisodeChange}
           autoWidth
         >
-          {episodes.map((episode) => {
+          {episodes.map((episode, index) => {
             return (
-              <MenuItem key={episode.title} value={episode.url}>
+              <MenuItem key={`episodeItem${index}`} value={episode.url}>
                 {episode.title}
               </MenuItem>
             );
