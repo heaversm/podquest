@@ -105,7 +105,9 @@ export function QueryForm({
         >
           Submit
         </Button>
-        {totalPoints !== null && <Typography>Points: {totalPoints}</Typography>}
+        {mode === "quiz" && totalPoints !== null && (
+          <Typography>Points: {totalPoints}</Typography>
+        )}
       </Box>
     </div>
   );

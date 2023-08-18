@@ -11,7 +11,6 @@ const __dirname = path.dirname(__filename);
 
 import crypto from "crypto";
 import axios from "axios";
-import https from "https";
 import { v4 as uuidv4 } from "uuid";
 import { Configuration, OpenAIApi } from "openai";
 import {
@@ -45,7 +44,6 @@ let chain; //will hold the llm and retriever
 let summarizer; //will hold the summarization chain
 let transcription; //will hold the transcription from openai
 let quizQuestions;
-let currentQuestion;
 
 //llm
 import { OpenAI } from "langchain/llms/openai";
@@ -124,6 +122,8 @@ app.post("/api/searchForPodcast", async (req, res) => {
     "https://api.podcastindex.org/api/1.0/search/byterm?q=" +
     podcastName +
     "&max=10";
+  //TODO: handle non results, timeout.
+  //TODO: replace with fetch
   await axios.get(url, options).then((response) => {
     // console.log(response.data);
     const feeds = response.data.feeds;
@@ -253,25 +253,27 @@ app.get("/playAudio", (req, res) => {
 app.post("/api/performUserQuery", async (req, res) => {
   const { query, mode, quizQuestion } = req.body;
   console.log(query, mode, quizQuestion);
-  let isCorrect = null;
-
-  let finalQuery = `The user answered this question: ${quizQuestion}. The user's answer was: ${query}. Is this correct?"`;
-
-  if (USE_ONLY_CONTEXT) {
-    finalQuery += `Use only the context of the question and answer to determine if the user is correct.`;
-  }
-
-  if (RESPOND_YES_NO) {
-    finalQuery += `Respond with only "yes" or "no"`;
-  } else if (BE_CONCISE) {
-    finalQuery += "Be concise in your response.";
-  }
-
-  const chainResponse = await chain.call({
-    query: finalQuery,
-  });
+  let chainResponse;
 
   if (mode === "quiz") {
+    let isCorrect = null;
+
+    let finalQuery = `The user answered this question: ${quizQuestion}. The user's answer was: ${query}. Is this correct?"`;
+
+    if (USE_ONLY_CONTEXT) {
+      finalQuery += `Use only the context of the question and answer to determine if the user is correct.`;
+    }
+
+    if (RESPOND_YES_NO) {
+      finalQuery += `Respond with only "yes" or "no"`;
+    } else if (BE_CONCISE) {
+      finalQuery += "Be concise in your response.";
+    }
+
+    chainResponse = await chain.call({
+      query: finalQuery,
+    });
+
     const chainResponseText = chainResponse.text
       .trim()
       .toLowerCase()
@@ -310,11 +312,21 @@ app.post("/api/performUserQuery", async (req, res) => {
       isCorrect = true;
     }
     console.log("isCorrect", isCorrect);
+    return res
+      .status(200)
+      .json({ text: chainResponse.text, isCorrect: isCorrect });
+  } else if (mode === "audio") {
+    let finalQuery = `The question is: ${query}. Respond with the timestamp from the podcast where the answer to the question can be found. The format should only be a valid timestamp of the format hh:mm:ss. If the answer to the question cannot be found in the podcast, respond with "Answer not found".`;
+    chainResponse = await chain.call({
+      query: finalQuery,
+    });
+    return res.status(200).json({ text: chainResponse.text });
+  } else {
+    chainResponse = await chain.call({
+      query: query,
+    });
+    return res.status(200).json({ text: chainResponse.text });
   }
-
-  return res
-    .status(200)
-    .json({ text: chainResponse.text, isCorrect: isCorrect });
 });
 
 function removeQueryParams(origURL) {
