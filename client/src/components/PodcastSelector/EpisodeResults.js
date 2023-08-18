@@ -44,8 +44,6 @@ export function EpisodeResults({
       body: JSON.stringify({ episodeUrl, mode }),
     })
       .then(async (res) => {
-        // console.log("res", res);
-        // return res.json();
         const reader = res.body.getReader();
         const decoder = new TextDecoder("utf-8");
         let chunk = "";
@@ -54,7 +52,6 @@ export function EpisodeResults({
           return reader.read().then((data) => {
             const { value, done } = data;
             if (done) {
-              // console.log("All responses received");
               return;
             }
 
@@ -65,14 +62,12 @@ export function EpisodeResults({
               if (part !== "") {
                 const jsonResponse = JSON.parse(part);
                 console.log(jsonResponse);
-                // console.log(jsonResponse.message);
                 handleSetStatusMessage({
                   message: jsonResponse.message,
                   type: "info",
                 });
 
                 if (jsonResponse.quizQuestions) {
-                  console.log(jsonResponse.quizQuestions);
                   //MH TODO: wait until llm ready?
                   handleSetQuizQuestions(jsonResponse.quizQuestions);
                 }

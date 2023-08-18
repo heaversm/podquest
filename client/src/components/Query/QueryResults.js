@@ -15,7 +15,6 @@ export function QueryResults({ queryResults }) {
 
   useEffect(() => {
     if (queryResults) {
-      console.log(queryResults);
       setQueryDisplay(queryResults);
     }
   }, [queryResults]);

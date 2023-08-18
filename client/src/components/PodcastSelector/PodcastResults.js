@@ -41,7 +41,6 @@ export function PodcastResults({
     })
       .then((res) => res.json())
       .then((data) => {
-        // console.log("data", data);
         const { mp3s } = data;
         handleSetEpisodes(mp3s);
       })

@@ -17,7 +17,6 @@ import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Container from "@mui/material/Container";
 import Link from "@mui/material/Link";
-// import Alert from "@mui/material/Alert";
 import Snackbar from "@mui/material/Snackbar";
 import MuiAlert from "@mui/material/Alert";
 import { createTheme, ThemeProvider } from "@mui/material/styles";
@@ -53,12 +52,12 @@ function App() {
   const [podcasts, setPodcasts] = useState([]);
   const [episodes, setEpisodes] = useState([]);
   const [queryResults, setQueryResults] = useState([]);
-  const [quizQuestions, setQuizQuestions] = useState([]);
   const [llmReady, setLLMReady] = useState(false);
   const [statusMessage, setStatusMessage] = useState(); //e.g message: "Waiting for user input...", type: "info","open: true"
   const [mode, setMode] = useState(null); //qa, audio, or quiz
   const [filePath, setFilePath] = useState(null); //path to audio file on server
   const [timeStamp, setTimestamp] = useState(null); //timestamp of audio file
+  const [quizQuestions, setQuizQuestions] = useState([]);
   const [quizQuestion, setCurQuizQuestion] = useState(null); //current quiz question
 
   const handleStatusClose = (event, reason) => {
@@ -80,6 +79,13 @@ function App() {
 
   const handleSetQueryResults = (queryResultsList) => {
     setQueryResults(queryResultsList);
+    if (quizQuestion < quizQuestions.length - 1) {
+      console.log("changing quiz question");
+      setCurQuizQuestion(quizQuestion + 1);
+    } else {
+      console.log("game over");
+      //TODO:MH - show game over message
+    }
   };
 
   const handleSetLLMReady = (llmReady) => {
@@ -128,31 +134,13 @@ function App() {
   }, [episodes]);
 
   useEffect(() => {
-    console.log("app llm ready", llmReady);
-  }, [llmReady]);
-
-  useEffect(() => {
-    console.log("quizQuestions", quizQuestions);
-    if (quizQuestions.length > 0) {
-      console.log("Picking random quiz question");
-      const curQuizQuestion = pickRandomQuizQuestion();
-      setCurQuizQuestion(curQuizQuestion);
+    //this is called when quizQuestions first set.
+    //TODO: MH - Make sure it doesn't fire again
+    if (quizQuestions && quizQuestions.length > 0) {
+      console.log("setting initial list of quiz questions");
+      setCurQuizQuestion(0);
     }
   }, [quizQuestions]);
-
-  // useEffect(() => {
-  //   console.log("quizQuestion", quizQuestion);
-  //   if (quizQuestion !== null) {
-  //     setQueryResults([quizQuestion]); //not implementing
-  //   }
-  // }, [quizQuestion]);
-
-  const pickRandomQuizQuestion = () => {
-    const randomQuizQuestion =
-      quizQuestions[Math.floor(Math.random() * quizQuestions.length)];
-    console.log("randomQuizQuestion", randomQuizQuestion);
-    return randomQuizQuestion;
-  };
 
   const parseTimestampToSeconds = (timestamp) => {
     // Timestamp format: "hh:mm:ss,SSS"
@@ -194,9 +182,6 @@ function App() {
         const jumpTime = parseTimestampToSeconds(timeStampMatch);
         setTimestamp(jumpTime);
       }
-    } else if (mode === "quiz") {
-      const curQuizQuestion = pickRandomQuizQuestion();
-      setCurQuizQuestion(curQuizQuestion);
     }
   }, [queryResults]);
 
@@ -263,6 +248,7 @@ function App() {
                       handleSetQueryResults={handleSetQueryResults}
                       handleSetStatusMessage={handleSetStatusMessage}
                       quizQuestion={quizQuestion}
+                      quizQuestions={quizQuestions}
                       mode={mode}
                     />
                   </Box>
@@ -321,9 +307,9 @@ function App() {
           <Snackbar
             className="statusContainer"
             open={true}
-            autoHideDuration={6000}
+            // autoHideDuration={6000}
             onClose={handleStatusClose}
-            anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
+            anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
           >
             <Alert
               variant="outlined"

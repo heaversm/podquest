@@ -23,9 +23,18 @@ import { FaissStore } from "langchain/vectorstores/faiss";
 import { OpenAIEmbeddings } from "langchain/embeddings/openai";
 import { RetrievalQAChain, loadSummarizationChain } from "langchain/chains";
 
+import { mkdir, writeFile } from "fs/promises";
+import { Readable } from "stream";
+import { finished } from "stream/promises";
+
 const LOAD_TRANSCRIPT_FROM_FILE = false; //MH TODO: currently loads text, but llm doesn't like this unless it has been formally called by langchain createTranscription
 const LOAD_AUDIO_FROM_FILE = false;
-const MAX_EPISODES = 10;
+const MAX_EPISODES = 5;
+const NUM_QUIZ_QUESTIONS = 5;
+const USE_ONLY_SUMMARY = false;
+const RESPOND_YES_NO = false;
+const BE_CONCISE = false;
+const USE_ONLY_CONTEXT = false;
 
 const configuration = new Configuration({
   apiKey: process.env.OPENAI_API_KEY,
@@ -36,6 +45,7 @@ let chain; //will hold the llm and retriever
 let summarizer; //will hold the summarization chain
 let transcription; //will hold the transcription from openai
 let quizQuestions;
+let currentQuestion;
 
 //llm
 import { OpenAI } from "langchain/llms/openai";
@@ -61,10 +71,12 @@ const transcribeAudio = async (filePath, mode) => {
         transcriptionFormat
       )
       .then((response) => {
+        console.log("transcription response!");
         console.log(response.data);
         return response.data;
       })
       .catch((err) => {
+        console.log("transcription error!");
         console.log(err);
       });
     return transcript;
@@ -175,60 +187,32 @@ app.post("/api/searchForEpisodes", async (req, res) => {
 });
 
 const getAudioFromURL = async (url) => {
-  return new Promise((resolve, reject) => {
-    https
-      .get(url, (response) => {
-        // console.log("status", response.statusCode);
-        console.log("status", response.statusCode);
-        if (response.statusCode === 302) {
-          if (url.includes("megaphone")) {
-            console.log("url", url);
-            const startIndex =
-              url.indexOf("megaphone.fm/") + "megaphone.fm/".length;
-            const endIndex = url.indexOf("?");
-            const mp3Component = url.substring(startIndex, endIndex);
-            console.log(
-              "start",
-              startIndex,
-              "end",
-              endIndex,
-              "mp3Component",
-              mp3Component
-            );
-            const newURL = `https://dcs.megaphone.fm/${mp3Component}`;
-            //TODO: need to stop current function execution and re-call this function with the newURL
-            console.log("newURL", newURL);
-            return getAudioFromURL(newURL)
-              .then(resolve) // Continue resolving the original promise
-              .catch(reject); // Pass any potential errors up the chain
-          }
-        }
-        if (response.statusCode === 200) {
-          const chunks = [];
+  return new Promise(async (resolve, reject) => {
+    // https
+    //   .get(url, (response) => {
+    //     // console.log("status", response.statusCode);
+    try {
+      const response = await fetch(url);
+      //console.log(response);
+      // console.log("status", response.statusCode);
 
-          response.on("data", (chunk) => {
-            chunks.push(chunk);
-          });
-
-          response.on("end", () => {
-            console.log("end");
-            const chunkedBuffer = Buffer.concat(chunks);
-            const fileID = uuidv4();
-            const fileName = `${fileID}.mp3`;
-
-            fs.writeFileSync(fileName, chunkedBuffer);
-            const filePath = path.join(__dirname, `../${fileName}`);
-            return resolve(filePath);
-          });
-        } else {
-          //reject with the error message
-          return reject("Error retrieving MP3 file");
-        }
-      })
-      .on("error", (error) => {
-        console.error("Error retrieving MP3 file:", error);
+      if (response.status === 200) {
+        //
+        if (!fs.existsSync("downloads")) await mkdir("downloads"); //Optional if you already have downloads directory
+        const fileID = uuidv4();
+        const fileName = `${fileID}.mp3`;
+        const destination = path.resolve("./downloads", fileName);
+        const fileStream = fs.createWriteStream(destination, { flags: "wx" });
+        await finished(Readable.fromWeb(response.body).pipe(fileStream));
+        console.log(destination);
+        return resolve(destination);
+      } else {
+        //reject with the error message
         return reject("Error retrieving MP3 file");
-      });
+      }
+    } catch (error) {
+      console.error("error retrieving mp3 file", error);
+    }
   }).catch((error) => {
     console.error("Unhandled rejection:", error);
   });
@@ -267,12 +251,24 @@ app.get("/playAudio", (req, res) => {
 });
 
 app.post("/api/performUserQuery", async (req, res) => {
-  const { query, mode } = req.body;
-  console.log(query, mode);
+  const { query, mode, quizQuestion } = req.body;
+  console.log(query, mode, quizQuestion);
   let isCorrect = null;
 
+  let finalQuery = `The user answered this question: ${quizQuestion}. The user's answer was: ${query}. Is this correct?"`;
+
+  if (USE_ONLY_CONTEXT) {
+    finalQuery += `Use only the context of the question and answer to determine if the user is correct.`;
+  }
+
+  if (RESPOND_YES_NO) {
+    finalQuery += `Respond with only "yes" or "no"`;
+  } else if (BE_CONCISE) {
+    finalQuery += "Be concise in your response.";
+  }
+
   const chainResponse = await chain.call({
-    query: query,
+    query: finalQuery,
   });
 
   if (mode === "quiz") {
@@ -377,15 +373,21 @@ app.post("/api/transcribeEpisode", async (req, res) => {
   chain = RetrievalQAChain.fromLLM(llm, retriever);
 
   if (mode === "quiz") {
-    summarizer = loadSummarizationChain(llm, { type: "map_reduce" }); //stuff, map_reduce, refine
-    const summary = await summarizer.call({
-      input_documents: output,
-    });
-    console.log("summary", summary);
     res.write(JSON.stringify({ message: "Generating quiz questions" }));
+    let query = `what are ${NUM_QUIZ_QUESTIONS} questions you could ask a student about the podcast to see if they understood and learned from what they had heard? Ask only questions that can be proven with facts or yes and no / true or false answers, not questions about opinions or qualitative states or feelings`;
+
+    if (USE_ONLY_SUMMARY) {
+      summarizer = loadSummarizationChain(llm, { type: "map_reduce" }); //stuff, map_reduce, refine
+      const summary = await summarizer.call({
+        input_documents: output,
+      });
+      console.log("summary", summary);
+
+      query += ` Use only this summary to generate the questions: ${summary}`;
+    }
+
     const quizQuestionsResponse = await chain.call({
-      query:
-        "what are 10 questions you could ask a student about the podcast to see if they understood and learned from what they had heard?",
+      query: query,
     });
     console.log("quizQuestions", quizQuestionsResponse.text);
     if (quizQuestionsResponse?.text) {
