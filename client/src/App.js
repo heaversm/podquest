@@ -202,7 +202,7 @@ function App() {
         <Box
           sx={{
             bgcolor: "background.paper",
-            pt: 8,
+            pt: 4,
             pb: 6,
           }}
         >

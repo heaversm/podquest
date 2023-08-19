@@ -34,6 +34,7 @@ const USE_ONLY_SUMMARY = false;
 const RESPOND_YES_NO = false;
 const BE_CONCISE = false;
 const USE_ONLY_CONTEXT = false;
+const MAX_FILE_SIZE = 10; //in MB
 
 const configuration = new Configuration({
   apiKey: process.env.OPENAI_API_KEY,
@@ -75,7 +76,8 @@ const transcribeAudio = async (filePath, mode) => {
       })
       .catch((err) => {
         console.log("transcription error!");
-        console.log(err);
+        // console.log(err);
+        return "maxlength";
       });
     return transcript;
   }
@@ -348,83 +350,112 @@ app.post("/api/transcribeEpisode", async (req, res) => {
     filePath = await getAudioFromURL(episodeUrl);
   }
 
+  //MH TODO: check file size
+  fs.stat(filePath, (err, stats) => {
+    if (err) {
+      res.status(500).send("Error getting file information");
+      return;
+    }
+
+    const fileSizeInMB = stats.size / 1024 / 1024;
+    console.log(fileSizeInMB);
+    if (fileSizeInMB > MAX_FILE_SIZE) {
+      console.log("file size too large");
+      //TODO: chunk audio and transcribe chunks, then assemble each transcription
+    } else {
+      console.log("file size ok");
+    }
+  });
+
   //TODO: make sure we are receiving a valid mp3
   res.write(JSON.stringify({ message: "Audio Received - Transcribing..." }));
   transcription = await transcribeAudio(filePath, mode);
-  // console.log("transcription2", transcription);
-  res.write(
-    JSON.stringify({ message: "Transcription Created - Creating Embeddings" })
-  );
-  const llm = new OpenAI();
-
-  // if (mode !== "audio") {
-  if (!LOAD_AUDIO_FROM_FILE) {
-    fs.unlink(filePath, (err) => {
-      if (err) {
-        console.error(err);
-        return res.status(500).json({ error: err });
-      }
-    });
-  }
-
-  const splitter = new RecursiveCharacterTextSplitter({
-    chunkSize: 256,
-    chunkOverlap: 0,
-  });
-
-  const output = await splitter.splitDocuments([
-    new Document({ pageContent: transcription }),
-  ]);
-  // console.log("output", output);
-  const vectorStore = await FaissStore.fromDocuments(
-    output,
-    new OpenAIEmbeddings()
-  );
-
-  const retriever = vectorStore.asRetriever();
-  chain = RetrievalQAChain.fromLLM(llm, retriever);
-
-  if (mode === "quiz") {
-    res.write(JSON.stringify({ message: "Generating quiz questions" }));
-    let query = `what are ${NUM_QUIZ_QUESTIONS} questions you could ask a student about the podcast to see if they understood and learned from what they had heard? Ask only questions that can be proven with facts or yes and no / true or false answers, not questions about opinions or qualitative states or feelings`;
-
-    if (USE_ONLY_SUMMARY) {
-      summarizer = loadSummarizationChain(llm, { type: "map_reduce" }); //stuff, map_reduce, refine
-      const summary = await summarizer.call({
-        input_documents: output,
+  if (transcription === "maxlength") {
+    res.write(JSON.stringify({ message: "Podcast too long to transcribe" }));
+    if (!LOAD_AUDIO_FROM_FILE) {
+      fs.unlink(filePath, (err) => {
+        if (err) {
+          console.error(err);
+          return res.status(500).json({ error: err });
+        }
       });
-      console.log("summary", summary);
+    }
+  } else {
+    res.write(
+      JSON.stringify({ message: "Transcription Created - Creating Embeddings" })
+    );
+    const llm = new OpenAI();
 
-      query += ` Use only this summary to generate the questions: ${summary}`;
+    // if (mode !== "audio") {
+    if (!LOAD_AUDIO_FROM_FILE) {
+      fs.unlink(filePath, (err) => {
+        if (err) {
+          console.error(err);
+          return res.status(500).json({ error: err });
+        }
+      });
     }
 
-    const quizQuestionsResponse = await chain.call({
-      query: query,
+    const splitter = new RecursiveCharacterTextSplitter({
+      chunkSize: 256,
+      chunkOverlap: 0,
     });
-    console.log("quizQuestions", quizQuestionsResponse.text);
-    if (quizQuestionsResponse?.text) {
-      const inputText = quizQuestionsResponse.text;
-      const lines = inputText.split("\n");
-      if (lines.length > 0) {
-        const questions = lines
-          .map((line) => line.trim()) // Remove leading/trailing whitespace
-          .filter((line) => line.length > 0) // Filter out empty lines
-          .filter((line) => /^\d+\.\s/.test(line)) // Filter lines that start with a number and a period
-          .map((line) => line.replace(/^\d+\.\s/, "")); // Remove the numbering
-        if (questions.length > 0) {
-          quizQuestions = questions;
+
+    const output = await splitter.splitDocuments([
+      new Document({ pageContent: transcription }),
+    ]);
+    // console.log("output", output);
+    const vectorStore = await FaissStore.fromDocuments(
+      output,
+      new OpenAIEmbeddings()
+    );
+
+    const retriever = vectorStore.asRetriever();
+    chain = RetrievalQAChain.fromLLM(llm, retriever);
+
+    if (mode === "quiz") {
+      res.write(JSON.stringify({ message: "Generating quiz questions" }));
+      let query = `what are ${NUM_QUIZ_QUESTIONS} questions you could ask a student about the podcast to see if they understood and learned from what they had heard? Ask only questions that can be proven with facts or yes and no / true or false answers, not questions about opinions or qualitative states or feelings`;
+
+      if (USE_ONLY_SUMMARY) {
+        summarizer = loadSummarizationChain(llm, { type: "map_reduce" }); //stuff, map_reduce, refine
+        const summary = await summarizer.call({
+          input_documents: output,
+        });
+        console.log("summary", summary);
+
+        query += ` Use only this summary to generate the questions: ${summary}`;
+      }
+
+      const quizQuestionsResponse = await chain.call({
+        query: query,
+      });
+      console.log("quizQuestions", quizQuestionsResponse.text);
+      if (quizQuestionsResponse?.text) {
+        const inputText = quizQuestionsResponse.text;
+        const lines = inputText.split("\n");
+        if (lines.length > 0) {
+          const questions = lines
+            .map((line) => line.trim()) // Remove leading/trailing whitespace
+            .filter((line) => line.length > 0) // Filter out empty lines
+            .filter((line) => /^\d+\.\s/.test(line)) // Filter lines that start with a number and a period
+            .map((line) => line.replace(/^\d+\.\s/, "")); // Remove the numbering
+          if (questions.length > 0) {
+            quizQuestions = questions;
+          }
         }
       }
     }
+    res.write(
+      JSON.stringify({
+        message: "LLM Ready",
+        done: true,
+        mode: mode,
+        quizQuestions: quizQuestions,
+      })
+    );
   }
-  res.write(
-    JSON.stringify({
-      message: "LLM Ready",
-      done: true,
-      mode: mode,
-      quizQuestions: quizQuestions,
-    })
-  );
+
   return res.end();
 });
 

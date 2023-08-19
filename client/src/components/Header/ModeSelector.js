@@ -34,7 +34,7 @@ export function ModeSelector({ handleSetMode }) {
     <>
       <Box
         sx={{
-          mt: 8,
+          mt: 4,
         }}
       >
         <Typography

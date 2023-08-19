@@ -27,6 +27,10 @@ export function PageIntro() {
         >
           Answers to any question about your favorite podcast episodes
         </Typography>
+        <Typography variant="caption" align="center" display="block">
+          Note: I can only transcribe podcasts of around 5-10 minutes currently
+          (I know...). I'm working on it!
+        </Typography>
       </Container>
     </>
   );

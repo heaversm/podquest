@@ -9,6 +9,8 @@ import Select, { SelectChangeEvent } from "@mui/material/Select";
 import Box from "@mui/material/Box";
 import Container from "@mui/material/Container";
 
+let llmReady = false;
+
 export function EpisodeResults({
   episodes,
   handleSetLLMReady,
@@ -69,7 +71,14 @@ export function EpisodeResults({
 
                 if (jsonResponse.quizQuestions) {
                   //MH TODO: wait until llm ready?
+                  console.log("llm ready");
+                  llmReady = true;
                   handleSetQuizQuestions(jsonResponse.quizQuestions);
+                } else if (
+                  jsonResponse.message === "Podcast too long to transcribe"
+                ) {
+                  console.log("too long!");
+                  llmReady = false;
                 }
               }
             });
@@ -84,7 +93,7 @@ export function EpisodeResults({
       })
       .then(() => {
         console.log("llm ready");
-        handleSetLLMReady(true);
+        handleSetLLMReady(llmReady);
       })
       .catch((err) => {
         console.log("err", err);
