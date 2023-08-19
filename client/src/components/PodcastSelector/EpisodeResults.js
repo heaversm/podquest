@@ -88,6 +88,10 @@ export function EpisodeResults({
       })
       .catch((err) => {
         console.log("err", err);
+        handleSetStatusMessage({
+          message: "Unexpected error! My bad...",
+          type: "info",
+        });
       });
   };
 

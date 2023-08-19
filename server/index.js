@@ -60,7 +60,7 @@ const transcribeAudio = async (filePath, mode) => {
     // return JSON.stringify(transcript);
   } else {
     const transcriptionFormat = mode === "audio" ? "srt" : "text";
-    console.log("filePath", filePath);
+    console.log("filePath", filePath, transcriptionFormat);
     transcript = await openai
       .createTranscription(
         fs.createReadStream(filePath),
