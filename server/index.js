@@ -26,6 +26,9 @@ import { mkdir, writeFile } from "fs/promises";
 import { Readable } from "stream";
 import { finished } from "stream/promises";
 
+import ffmpeg from "fluent-ffmpeg";
+import getMP3Duration from "get-mp3-duration";
+
 const LOAD_TRANSCRIPT_FROM_FILE = false; //MH TODO: currently loads text, but llm doesn't like this unless it has been formally called by langchain createTranscription
 const LOAD_AUDIO_FROM_FILE = false;
 const MAX_EPISODES = 5;
@@ -34,7 +37,8 @@ const USE_ONLY_SUMMARY = false;
 const RESPOND_YES_NO = false;
 const BE_CONCISE = false;
 const USE_ONLY_CONTEXT = false;
-const MAX_FILE_SIZE = 10; //in MB
+const MAX_FILE_SIZE = 20; //in MB
+const MAX_DURATION = 600; //in seconds //TODO: fine tune this - not sure what whisper max is
 
 const configuration = new Configuration({
   apiKey: process.env.OPENAI_API_KEY,
@@ -338,6 +342,40 @@ function removeQueryParams(origURL) {
   return nonParamURL;
 }
 
+async function splitAudioIntoChunks(filePath) {
+  return new Promise((resolve, reject) => {
+    const buffer = fs.readFileSync(filePath);
+    const duration = getMP3Duration(buffer);
+    const inputDurationSeconds = duration / 1000;
+    const chunkDurationSeconds = MAX_DURATION;
+    const numChunks = Math.ceil(inputDurationSeconds / chunkDurationSeconds);
+    const promises = [];
+
+    for (let chunkIndex = 0; chunkIndex < numChunks; chunkIndex++) {
+      const startTime = chunkIndex * chunkDurationSeconds;
+      const endTime = Math.min(
+        (chunkIndex + 1) * chunkDurationSeconds,
+        inputDurationSeconds
+      );
+      const promise = new Promise((resolveChunk, rejectChunk) => {
+        ffmpeg(filePath)
+          .setStartTime(startTime)
+          .setDuration(endTime - startTime)
+          .output(`${filePath}_${chunkIndex}.mp3`)
+          .on("end", () => {
+            console.log(`Chunk ${chunkIndex} exported successfully`);
+          })
+          .on("error", (err) => {
+            console.error(`Error exporting chunk ${chunkIndex}:`, err.message);
+          })
+          .run();
+      });
+      promises.push(promise);
+    }
+    console.log("all chunks processed");
+  });
+}
+
 app.post("/api/transcribeEpisode", async (req, res) => {
   const { episodeUrl, mode } = req.body;
   console.log(episodeUrl, "episodeURL");
@@ -351,7 +389,7 @@ app.post("/api/transcribeEpisode", async (req, res) => {
   }
 
   //MH TODO: check file size
-  fs.stat(filePath, (err, stats) => {
+  fs.stat(filePath, async (err, stats) => {
     if (err) {
       res.status(500).send("Error getting file information");
       return;
@@ -362,11 +400,18 @@ app.post("/api/transcribeEpisode", async (req, res) => {
     if (fileSizeInMB > MAX_FILE_SIZE) {
       console.log("file size too large");
       //TODO: chunk audio and transcribe chunks, then assemble each transcription
+      // MH: currently not necessary (whisper limits by MB, not time)
+      try {
+        await splitAudioIntoChunks(filePath);
+      } catch (error) {
+        console.log("error splitting audio", error);
+      }
     } else {
       console.log("file size ok");
+      //TODO: move the necessary code below here to do a single show transcribeAudio call
     }
   });
-
+  console.log("all chunking done, now transcribe");
   //TODO: make sure we are receiving a valid mp3
   res.write(JSON.stringify({ message: "Audio Received - Transcribing..." }));
   transcription = await transcribeAudio(filePath, mode);
