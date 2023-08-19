@@ -79,13 +79,16 @@ function App() {
 
   const handleSetQueryResults = (queryResultsList) => {
     setQueryResults(queryResultsList);
-    if (quizQuestion < quizQuestions.length - 1) {
-      console.log("changing quiz question");
-      setCurQuizQuestion(quizQuestion + 1);
-    } else {
-      console.log("game over");
-      //TODO:MH - show game over message
+    if (mode === "quiz") {
+      if (quizQuestion < quizQuestions.length - 1) {
+        console.log("changing quiz question");
+        setCurQuizQuestion(quizQuestion + 1);
+      } else {
+        console.log("game over");
+        //TODO:MH - show game over message
+      }
     }
+    
   };
 
   const handleSetLLMReady = (llmReady) => {
@@ -192,6 +195,7 @@ function App() {
         message: `Moving audio to ${timeStamp} seconds`,
         type: "success",
       });
+      audioRef.current.play();
     }
   }, [timeStamp]);
 
@@ -303,7 +307,7 @@ function App() {
             </Box>
           </Container>
         )}
-        <Container maxWidth="md" sx={{ paddingBottom: "40px" }}>
+        <Container maxWidth="md" sx={{ py: 4 }}>
           <Box
             maxWidth="md"
             sx={{

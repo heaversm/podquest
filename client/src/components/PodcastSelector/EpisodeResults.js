@@ -71,7 +71,7 @@ export function EpisodeResults({
 
                 if (jsonResponse.quizQuestions) {
                   //MH TODO: wait until llm ready?
-                  console.log("llm ready");
+                  console.log("llm ready with quiz questions");
                   llmReady = true;
                   handleSetQuizQuestions(jsonResponse.quizQuestions);
                 } else if (
@@ -79,6 +79,12 @@ export function EpisodeResults({
                 ) {
                   console.log("too long!");
                   llmReady = false;
+                } else {
+                  handleSetStatusMessage({
+                    message: "LLM ready",
+                    type: "info",
+                  });
+                  llmReady = true;
                 }
               }
             });

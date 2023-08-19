@@ -28,6 +28,8 @@ import { finished } from "stream/promises";
 
 import ffmpeg from "fluent-ffmpeg";
 import getMP3Duration from "get-mp3-duration";
+import util from "util";
+const statAsync = util.promisify(fs.stat);
 
 const LOAD_TRANSCRIPT_FROM_FILE = false; //MH TODO: currently loads text, but llm doesn't like this unless it has been formally called by langchain createTranscription
 const LOAD_AUDIO_FROM_FILE = false;
@@ -74,7 +76,6 @@ const transcribeAudio = async (filePath, mode) => {
         transcriptionFormat
       )
       .then((response) => {
-        console.log("transcription response!");
         console.log(response.data);
         return response.data;
       })
@@ -350,6 +351,7 @@ async function splitAudioIntoChunks(filePath) {
     const chunkDurationSeconds = MAX_DURATION;
     const numChunks = Math.ceil(inputDurationSeconds / chunkDurationSeconds);
     const promises = [];
+    const outputPaths = [];
 
     for (let chunkIndex = 0; chunkIndex < numChunks; chunkIndex++) {
       const startTime = chunkIndex * chunkDurationSeconds;
@@ -358,10 +360,12 @@ async function splitAudioIntoChunks(filePath) {
         inputDurationSeconds
       );
       const promise = new Promise((resolveChunk, rejectChunk) => {
+        const outputPath = `${chunkIndex}_${filePath}`;
+        outputPaths.push(outputPath);
         ffmpeg(filePath)
           .setStartTime(startTime)
           .setDuration(endTime - startTime)
-          .output(`${filePath}_${chunkIndex}.mp3`)
+          .output(outputPath)
           .on("end", () => {
             console.log(`Chunk ${chunkIndex} exported successfully`);
           })
@@ -373,8 +377,31 @@ async function splitAudioIntoChunks(filePath) {
       promises.push(promise);
     }
     console.log("all chunks processed");
+    return outputPaths;
   });
 }
+
+const establishLLM = async function (transcript, mode) {
+  // console.log("establishing llm");
+  const llm = new OpenAI();
+  const splitter = new RecursiveCharacterTextSplitter({
+    chunkSize: 256,
+    chunkOverlap: 0,
+  });
+
+  const output = await splitter.splitDocuments([
+    new Document({ pageContent: transcript }),
+  ]);
+  // console.log("output", output);
+  const vectorStore = await FaissStore.fromDocuments(
+    output,
+    new OpenAIEmbeddings()
+  );
+
+  const retriever = vectorStore.asRetriever();
+  chain = RetrievalQAChain.fromLLM(llm, retriever);
+  return;
+};
 
 app.post("/api/transcribeEpisode", async (req, res) => {
   const { episodeUrl, mode } = req.body;
@@ -383,17 +410,12 @@ app.post("/api/transcribeEpisode", async (req, res) => {
   if (LOAD_AUDIO_FROM_FILE) {
     filePath = path.join(__dirname, "../audio.mp3");
   } else {
-    //const nonParamURL = removeQueryParams(episodeUrl);
-    //console.log(nonParamURL, "nonParamURL");
     filePath = await getAudioFromURL(episodeUrl);
   }
 
   //MH TODO: check file size
-  fs.stat(filePath, async (err, stats) => {
-    if (err) {
-      res.status(500).send("Error getting file information");
-      return;
-    }
+  const generateTranscriptions = async () => {
+    const stats = await statAsync(filePath);
 
     const fileSizeInMB = stats.size / 1024 / 1024;
     console.log(fileSizeInMB);
@@ -402,61 +424,33 @@ app.post("/api/transcribeEpisode", async (req, res) => {
       //TODO: chunk audio and transcribe chunks, then assemble each transcription
       // MH: currently not necessary (whisper limits by MB, not time)
       try {
-        await splitAudioIntoChunks(filePath);
+        const outputPaths = await splitAudioIntoChunks(filePath);
+        console.log("outputPaths", outputPaths);
       } catch (error) {
         console.log("error splitting audio", error);
       }
     } else {
       console.log("file size ok");
       //TODO: move the necessary code below here to do a single show transcribeAudio call
+      res.write(
+        JSON.stringify({ message: "Audio Received - Transcribing..." })
+      );
+      transcription = await transcribeAudio(filePath, mode);
+      res.write(
+        JSON.stringify({
+          message: "Transcription Created - Creating Embeddings",
+        })
+      );
+      if (!LOAD_AUDIO_FROM_FILE) {
+        fs.unlink(filePath, (err) => {
+          if (err) {
+            console.error(err);
+            return res.status(500).json({ error: err });
+          }
+        });
+      }
+      await establishLLM(transcription, mode);
     }
-  });
-  console.log("all chunking done, now transcribe");
-  //TODO: make sure we are receiving a valid mp3
-  res.write(JSON.stringify({ message: "Audio Received - Transcribing..." }));
-  transcription = await transcribeAudio(filePath, mode);
-  if (transcription === "maxlength") {
-    res.write(JSON.stringify({ message: "Podcast too long to transcribe" }));
-    if (!LOAD_AUDIO_FROM_FILE) {
-      fs.unlink(filePath, (err) => {
-        if (err) {
-          console.error(err);
-          return res.status(500).json({ error: err });
-        }
-      });
-    }
-  } else {
-    res.write(
-      JSON.stringify({ message: "Transcription Created - Creating Embeddings" })
-    );
-    const llm = new OpenAI();
-
-    // if (mode !== "audio") {
-    if (!LOAD_AUDIO_FROM_FILE) {
-      fs.unlink(filePath, (err) => {
-        if (err) {
-          console.error(err);
-          return res.status(500).json({ error: err });
-        }
-      });
-    }
-
-    const splitter = new RecursiveCharacterTextSplitter({
-      chunkSize: 256,
-      chunkOverlap: 0,
-    });
-
-    const output = await splitter.splitDocuments([
-      new Document({ pageContent: transcription }),
-    ]);
-    // console.log("output", output);
-    const vectorStore = await FaissStore.fromDocuments(
-      output,
-      new OpenAIEmbeddings()
-    );
-
-    const retriever = vectorStore.asRetriever();
-    chain = RetrievalQAChain.fromLLM(llm, retriever);
 
     if (mode === "quiz") {
       res.write(JSON.stringify({ message: "Generating quiz questions" }));
@@ -475,7 +469,7 @@ app.post("/api/transcribeEpisode", async (req, res) => {
       const quizQuestionsResponse = await chain.call({
         query: query,
       });
-      console.log("quizQuestions", quizQuestionsResponse.text);
+      console.log(quizQuestionsResponse.text);
       if (quizQuestionsResponse?.text) {
         const inputText = quizQuestionsResponse.text;
         const lines = inputText.split("\n");
@@ -490,17 +484,19 @@ app.post("/api/transcribeEpisode", async (req, res) => {
           }
         }
       }
+      res.write(
+        JSON.stringify({
+          message: "Quiz questions generated",
+          quizQuestions: quizQuestions,
+        })
+      );
     }
-    res.write(
-      JSON.stringify({
-        message: "LLM Ready",
-        done: true,
-        mode: mode,
-        quizQuestions: quizQuestions,
-      })
-    );
-  }
+    // console.log("end getFileSize");
+    //MH TODO: rename function
+  };
 
+  await generateTranscriptions();
+  console.log("end transcribeEpisode");
   return res.end();
 });
 
