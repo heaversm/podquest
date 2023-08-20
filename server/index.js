@@ -30,6 +30,7 @@ import ffmpeg from "fluent-ffmpeg";
 import getMP3Duration from "get-mp3-duration";
 import util from "util";
 const statAsync = util.promisify(fs.stat);
+const ffmpegAsync = util.promisify(ffmpeg);
 
 const LOAD_TRANSCRIPT_FROM_FILE = false; //MH TODO: currently loads text, but llm doesn't like this unless it has been formally called by langchain createTranscription
 const LOAD_AUDIO_FROM_FILE = false;
@@ -345,6 +346,7 @@ function removeQueryParams(origURL) {
 
 async function splitAudioIntoChunks(filePath) {
   return new Promise((resolve, reject) => {
+    console.log("splitting into chunks");
     const buffer = fs.readFileSync(filePath);
     const duration = getMP3Duration(buffer);
     const inputDurationSeconds = duration / 1000;
@@ -359,25 +361,40 @@ async function splitAudioIntoChunks(filePath) {
         (chunkIndex + 1) * chunkDurationSeconds,
         inputDurationSeconds
       );
+      console.log("start", startTime, "end", endTime);
       const promise = new Promise((resolveChunk, rejectChunk) => {
-        const outputPath = `${chunkIndex}_${filePath}`;
+        console.log("origPath", filePath);
+        let tempPath = filePath.replace(".mp3", "");
+        const outputPath = `${tempPath}_${chunkIndex}.mp3`;
         outputPaths.push(outputPath);
+        console.log("outputPath", outputPath);
         ffmpeg(filePath)
           .setStartTime(startTime)
           .setDuration(endTime - startTime)
           .output(outputPath)
           .on("end", () => {
             console.log(`Chunk ${chunkIndex} exported successfully`);
+            resolveChunk();
           })
           .on("error", (err) => {
             console.error(`Error exporting chunk ${chunkIndex}:`, err.message);
+            rejectChunk(err);
           })
           .run();
       });
       promises.push(promise);
     }
-    console.log("all chunks processed");
-    return outputPaths;
+    // console.log("all chunks processed");
+    // return outputPaths;
+    Promise.all(promises)
+      .then(() => {
+        console.log("All chunks exported successfully");
+        resolve(outputPaths);
+      })
+      .catch((err) => {
+        console.error("Error exporting chunks:", err.message);
+        reject(err);
+      });
   });
 }
 
@@ -403,6 +420,20 @@ const establishLLM = async function (transcript, mode) {
   return;
 };
 
+const removeFile = async (filePath) => {
+  if (!LOAD_AUDIO_FROM_FILE) {
+    fs.unlink(filePath, (err) => {
+      if (err) {
+        return { status: "error", error: err };
+      } else {
+        return { status: "success" };
+      }
+    });
+  } else {
+    return { status: "success" };
+  }
+};
+
 app.post("/api/transcribeEpisode", async (req, res) => {
   const { episodeUrl, mode } = req.body;
   console.log(episodeUrl, "episodeURL");
@@ -418,7 +449,10 @@ app.post("/api/transcribeEpisode", async (req, res) => {
     const stats = await statAsync(filePath);
 
     const fileSizeInMB = stats.size / 1024 / 1024;
-    console.log(fileSizeInMB);
+    console.log("fs in MN", fileSizeInMB);
+
+    res.write(JSON.stringify({ message: "Audio Received - Transcribing..." }));
+
     if (fileSizeInMB > MAX_FILE_SIZE) {
       console.log("file size too large");
       //TODO: chunk audio and transcribe chunks, then assemble each transcription
@@ -426,31 +460,41 @@ app.post("/api/transcribeEpisode", async (req, res) => {
       try {
         const outputPaths = await splitAudioIntoChunks(filePath);
         console.log("outputPaths", outputPaths);
+        let finishedOutputs = 0;
+
+        const chunkedTranscript = "";
+
+        outputPaths.forEach(async (outputPath) => {
+          console.log("transcribing output chunk", outputPath);
+          const chunkTranscript = await transcribeAudio(outputPath, mode);
+          console.log("chunkTranscript", chunkTranscript);
+          chunkedTranscript += chunkTranscript;
+          finishedOutputs++;
+        });
+        console.log("chunks done", chunkedTranscript);
+        transcription = chunkedTranscript;
       } catch (error) {
         console.log("error splitting audio", error);
       }
     } else {
       console.log("file size ok");
       //TODO: move the necessary code below here to do a single show transcribeAudio call
-      res.write(
-        JSON.stringify({ message: "Audio Received - Transcribing..." })
-      );
+
       transcription = await transcribeAudio(filePath, mode);
-      res.write(
-        JSON.stringify({
-          message: "Transcription Created - Creating Embeddings",
-        })
-      );
-      if (!LOAD_AUDIO_FROM_FILE) {
-        fs.unlink(filePath, (err) => {
-          if (err) {
-            console.error(err);
-            return res.status(500).json({ error: err });
-          }
-        });
+
+      const removeResult = removeFile(filePath);
+      if (message === "error") {
+        console.error(removeResult.error);
+        return res.status(500).json({ error: removeResult.error });
       }
-      await establishLLM(transcription, mode);
     }
+    console.log("establishing llm");
+    res.write(
+      JSON.stringify({
+        message: "Transcription Created - Creating Embeddings",
+      })
+    );
+    await establishLLM(transcription, mode);
 
     if (mode === "quiz") {
       res.write(JSON.stringify({ message: "Generating quiz questions" }));
