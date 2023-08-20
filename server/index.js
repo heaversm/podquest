@@ -421,6 +421,7 @@ const removeFile = async (filePath) => {
   if (!LOAD_AUDIO_FROM_FILE) {
     fs.unlink(filePath, (err) => {
       if (err) {
+        console.error("error removing file");
         return { status: "error", error: err };
       } else {
         return { status: "success" };
@@ -480,7 +481,7 @@ app.post("/api/transcribeEpisode", async (req, res) => {
       transcription = await transcribeAudio(filePath, mode);
 
       const removeResult = removeFile(filePath);
-      if (message === "error") {
+      if (removeResult.status === "error") {
         console.error(removeResult.error);
         return res.status(500).json({ error: removeResult.error });
       }
@@ -497,7 +498,7 @@ app.post("/api/transcribeEpisode", async (req, res) => {
 
     if (mode === "quiz") {
       res.write(JSON.stringify({ message: "Generating quiz questions" }));
-      let query = `You are a college teacher. what are the most important ${NUM_QUIZ_QUESTIONS_TO_GENERATE} questions you could ask a student about the concepts in the podcast to see if they understood. Do not include any information about promotional sponsors or advertisements, or ask questions about people or business names. Pick all your questions from what is described in the middle of the context, not the beginning or end.`;
+      let query = `You are a college teacher. what are the most important ${NUM_QUIZ_QUESTIONS_TO_GENERATE} questions you could ask a student about the concepts in the podcast to see if they understood. Do not include any information about promotional sponsors or advertisements. Do not ask questions about people or business names. Pick all your questions from the text in the middle of the podcast. Do not pick questions from the beginning or end of the podcast.`;
 
       if (USE_ONLY_SUMMARY) {
         summarizer = loadSummarizationChain(llm, { type: "map_reduce" }); //stuff, map_reduce, refine
