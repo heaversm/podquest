@@ -108,7 +108,7 @@ function App() {
   };
 
   const handleSetQuizQuestions = (questions) => {
-    console.log("setting quiz questions", questions);
+    // console.log("setting quiz questions", questions);
     setQuizQuestions(questions);
   };
 
