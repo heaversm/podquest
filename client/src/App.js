@@ -30,6 +30,7 @@ import { QueryForm } from "./components/Query/QueryForm";
 import { QueryResults } from "./components/Query/QueryResults";
 import { PageIntro } from "./components/Header/PageIntro";
 import { ModeSelector } from "./components/Header/ModeSelector";
+import { Footer } from "./components/Footer/Footer";
 
 //colors:
 // https://mui.com/material-ui/customization/color/#color-palette
@@ -110,7 +111,6 @@ function App() {
   };
 
   const handleSetQuizQuestions = (questions) => {
-    // console.log("setting quiz questions", questions);
     setQuizQuestions(questions);
   };
 
@@ -168,19 +168,6 @@ function App() {
     return firstTimestamp;
   };
 
-  const fetchQuizQuestions = async () => {
-    console.log("fetch quiz questions");
-    const response = await fetch("/api/process-questions", {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
-    const data = await response.json();
-    console.log(data);
-    return data.quizQuestions;
-  };
-
   const audioRef = useRef(null);
 
   useEffect(() => {
@@ -224,36 +211,22 @@ function App() {
               <Box align="center" className="formContainer" sx={{ mt: 8 }}>
                 {llmReady ? (
                   <Box sx={{ mt: 8 }}>
-                    {mode === "quiz" && quizQuestion ? (
-                      <>
-                        <Typography
-                          component="h4"
-                          variant="h5"
-                          align="left"
-                          color="primary.main"
-                          gutterBottom
-                          sx={{ mb: 2 }}
-                        >
-                          Step 2: Answer Questions
-                        </Typography>
-                      </>
-                    ) : (
-                      <Typography
-                        component="h4"
-                        variant="h5"
-                        align="left"
-                        color="primary.main"
-                        gutterBottom
-                        sx={{ mb: 2 }}
-                      >
-                        Step 2: Get Answers
-                      </Typography>
-                    )}
-
+                    <Typography
+                      component="h4"
+                      variant="h5"
+                      align="left"
+                      color="primary.main"
+                      gutterBottom
+                      sx={{ mb: 2 }}
+                    >
+                      Step 2:{" "}
+                      {mode === "quiz" && quizQuestion
+                        ? "Answer Questions"
+                        : "Get Answers"}
+                    </Typography>
                     {queryResults && queryResults.length > 0 && (
                       <QueryResults queryResults={queryResults} />
                     )}
-
                     <QueryForm
                       llmReady={llmReady}
                       handleSetQueryResults={handleSetQueryResults}
@@ -272,7 +245,7 @@ function App() {
                         gutterBottom
                         sx={{ mb: 2 }}
                       >
-                        Game Over!
+                        Game Over! You scored {totalPoints} points.
                       </Typography>
                     )}
                   </Box>
@@ -319,7 +292,7 @@ function App() {
           <Container maxWidth="md">
             <Box
               maxWidth="md"
-              sx={{ display: "flex", justifyContent: "center" }}
+              sx={{ display: "flex", mb: 4, justifyContent: "center" }}
             >
               <audio ref={audioRef} id="audioPlayer" controls src={filePath}>
                 Your browser does not support the audio element.
@@ -327,6 +300,7 @@ function App() {
             </Box>
           </Container>
         )}
+        <Footer />
         <Container maxWidth="md" sx={{ py: 4 }}>
           <Box
             maxWidth="md"

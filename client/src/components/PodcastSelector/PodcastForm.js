@@ -21,8 +21,15 @@ export function PodcastForm({ handleSetPodcasts, handleSetStatusMessage }) {
     })
       .then((res) => res.json())
       .then((data) => {
-        const { podcasts } = data;
-        handleSetPodcasts(podcasts);
+        if (data.error) {
+          handleSetStatusMessage({
+            message: data.error,
+            type: "error",
+          });
+        } else if (data.podcasts) {
+          const { podcasts } = data;
+          handleSetPodcasts(podcasts);
+        }
       })
       .catch((err) => {
         console.log("err", err);

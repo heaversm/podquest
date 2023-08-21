@@ -29,31 +29,35 @@ import { finished } from "stream/promises";
 import ffmpeg from "fluent-ffmpeg";
 import getMP3Duration from "get-mp3-duration";
 import util from "util";
-const statAsync = util.promisify(fs.stat);
-const ffmpegAsync = util.promisify(ffmpeg);
 
+const statAsync = util.promisify(fs.stat); //get file sizes asynchronously to determine if above API limits
+
+//CONFIGURATION
 const LOAD_TRANSCRIPT_FROM_FILE = false; //MH TODO: currently loads text, but llm doesn't like this unless it has been formally called by langchain createTranscription
 const LOAD_AUDIO_FROM_FILE = false;
 const MAX_EPISODES = 5;
 
-const NUM_QUIZ_QUESTIONS_TO_GENERATE = 20;
-const NUM_QUIZ_QUESTIONS = 10;
-const USE_ONLY_SUMMARY = false;
-const RESPOND_YES_NO = false;
-const BE_CONCISE = false;
+const NUM_QUIZ_QUESTIONS_TO_GENERATE = 5; //how many initial questions do you want the llm to come up with
+const NUM_QUIZ_QUESTIONS = 5; //how many of the generated quiz questions do you want to keep
+const USE_ONLY_SUMMARY = false; //ask questions only pertaining to the summary
+const RESPOND_YES_NO = false; //respond with only yes or no
+const BE_CONCISE = false; //be concise in your response
 const USE_ONLY_CONTEXT = false;
-const MAX_FILE_SIZE = 20; //in MB
-const MAX_DURATION = 600; //in seconds //TODO: fine tune this - not sure what whisper max is
+
+const MAX_FILE_SIZE = 20; //in MB. If a podcast is over this size, split it up
+const MAX_DURATION = 600; //in seconds, if splitting by duration instead of size (not currently used?)
+//END CONFIGURATION
 
 const configuration = new Configuration({
   apiKey: process.env.OPENAI_API_KEY,
 });
 const openai = new OpenAIApi(configuration);
 
+const llm = new OpenAI(); //the llm model to use (currently only openai)
 let chain; //will hold the llm and retriever
 let summarizer; //will hold the summarization chain
 let transcription; //will hold the transcription from openai
-let quizQuestions;
+let quizQuestions; //will hold the quiz questions if this mode is selected
 
 //llm
 import { OpenAI } from "langchain/llms/openai";
@@ -83,8 +87,7 @@ const transcribeAudio = async (filePath, mode) => {
         return response.data;
       })
       .catch((err) => {
-        console.log("transcription error!");
-        // console.log(err);
+        console.log("transcription error!", err);
         return "maxlength";
       });
     return transcript;
@@ -135,17 +138,21 @@ app.post("/api/searchForPodcast", async (req, res) => {
   //TODO: handle non results, timeout.
   //TODO: replace with fetch
   await axios.get(url, options).then((response) => {
-    // console.log(response.data);
-    const feeds = response.data.feeds;
-    const podcasts = [];
-    feeds.forEach((feed) => {
-      podcasts.push({
-        title: feed.title,
-        url: feed.url,
+    if (response.data?.feeds?.length > 0) {
+      const feeds = response.data.feeds;
+      const podcasts = [];
+      feeds.forEach((feed) => {
+        podcasts.push({
+          title: feed.title,
+          url: feed.url,
+        });
       });
-    });
-    // console.log(podcasts);
-    res.json({ podcasts });
+      // console.log(podcasts);
+      res.json({ podcasts });
+    } else {
+      console.log("no podcasts found");
+      return res.status(400).json({ error: "No podcasts found" });
+    }
   });
 });
 
@@ -198,23 +205,18 @@ app.post("/api/searchForEpisodes", async (req, res) => {
 
 const getAudioFromURL = async (url) => {
   return new Promise(async (resolve, reject) => {
-    // https
-    //   .get(url, (response) => {
-    //     // console.log("status", response.statusCode);
     try {
       const response = await fetch(url);
-      //console.log(response);
       // console.log("status", response.statusCode);
 
       if (response.status === 200) {
-        //
         if (!fs.existsSync("downloads")) await mkdir("downloads"); //Optional if you already have downloads directory
         const fileID = uuidv4();
         const fileName = `${fileID}.mp3`;
         const destination = path.resolve("./downloads", fileName);
         const fileStream = fs.createWriteStream(destination, { flags: "wx" });
         await finished(Readable.fromWeb(response.body).pipe(fileStream));
-        console.log(destination);
+        // console.log(destination);
         return resolve(destination);
       } else {
         //reject with the error message
@@ -262,7 +264,7 @@ app.get("/playAudio", (req, res) => {
 
 app.post("/api/performUserQuery", async (req, res) => {
   const { query, mode, quizQuestion } = req.body;
-  console.log(query, mode, quizQuestion);
+  console.log("query,mode,quiz", query, mode, quizQuestion);
   let chainResponse;
 
   if (mode === "quiz") {
@@ -354,6 +356,7 @@ async function splitAudioIntoChunks(filePath) {
     const numChunks = Math.ceil(inputDurationSeconds / chunkDurationSeconds);
     const promises = [];
     const outputPaths = [];
+    const chunkDurations = [];
 
     for (let chunkIndex = 0; chunkIndex < numChunks; chunkIndex++) {
       const startTime = chunkIndex * chunkDurationSeconds;
@@ -414,7 +417,7 @@ const establishLLM = async function (transcript, mode) {
 
   const retriever = vectorStore.asRetriever();
   chain = RetrievalQAChain.fromLLM(llm, retriever);
-  return;
+  return output;
 };
 
 const removeFile = async (filePath) => {
@@ -439,7 +442,12 @@ app.post("/api/transcribeEpisode", async (req, res) => {
   if (LOAD_AUDIO_FROM_FILE) {
     filePath = path.join(__dirname, "../audio.mp3");
   } else {
-    filePath = await getAudioFromURL(episodeUrl);
+    try {
+      filePath = await getAudioFromURL(episodeUrl);
+    } catch (error) {
+      console.log("error getting audio file", error);
+      return res.status(500).json({ error: error });
+    }
   }
 
   //MH TODO: check file size
@@ -453,8 +461,6 @@ app.post("/api/transcribeEpisode", async (req, res) => {
 
     if (fileSizeInMB > MAX_FILE_SIZE) {
       console.log("file size too large, splitting audio");
-      //TODO: chunk audio and transcribe chunks, then assemble each transcription
-      // MH: currently not necessary (whisper limits by MB, not time)
       try {
         const outputPaths = await splitAudioIntoChunks(filePath);
 
@@ -466,6 +472,9 @@ app.post("/api/transcribeEpisode", async (req, res) => {
 
         transcription = chunkedTranscripts.join(""); // Combine all chunk transcripts
         console.log("transcription", transcription);
+
+        //TODO: need to adjust transcript timestamps to account for chunking
+
         //remove chunked audio
         outputPaths.forEach((outputPath) => {
           removeFile(outputPath);
@@ -477,8 +486,12 @@ app.post("/api/transcribeEpisode", async (req, res) => {
       }
     } else {
       console.log("file size ok");
-
-      transcription = await transcribeAudio(filePath, mode);
+      try {
+        transcription = await transcribeAudio(filePath, mode);
+      } catch (error) {
+        console.log("error transcribing audio", error);
+        return res.status(500).json({ error: error });
+      }
 
       const removeResult = removeFile(filePath);
       if (removeResult.status === "error") {
@@ -494,13 +507,14 @@ app.post("/api/transcribeEpisode", async (req, res) => {
     );
 
     console.log("establishing llm");
-    await establishLLM(transcription, mode);
+    const output = await establishLLM(transcription, mode);
 
     if (mode === "quiz") {
       res.write(JSON.stringify({ message: "Generating quiz questions" }));
       let query = `You are a college teacher. what are the most important ${NUM_QUIZ_QUESTIONS_TO_GENERATE} questions you could ask a student about the concepts in the podcast to see if they understood. Do not include any information about promotional sponsors or advertisements. Do not ask questions about people or business names. Pick all your questions from the text in the middle of the podcast. Do not pick questions from the beginning or end of the podcast.`;
 
       if (USE_ONLY_SUMMARY) {
+        //MH - currently fails because output is not returned from establishLLM
         summarizer = loadSummarizationChain(llm, { type: "map_reduce" }); //stuff, map_reduce, refine
         const summary = await summarizer.call({
           input_documents: output,
@@ -525,17 +539,18 @@ app.post("/api/transcribeEpisode", async (req, res) => {
             .filter((line) => /^\d+\.\s/.test(line)) // Filter lines that start with a number and a period
             .map((line) => line.replace(/^\d+\.\s/, "")); // Remove the numbering
           if (questions.length > 0) {
-            // quizQuestions = questions;
-            //supposedly the first ~10 questions an LLM generates are generic, so we'll toss them
-            const sliceIndex =
-              NUM_QUIZ_QUESTIONS_TO_GENERATE - NUM_QUIZ_QUESTIONS;
-            //keep only the questions from the sliceIndex to the end of the array
-            quizQuestions = questions.slice(sliceIndex, questions.length - 1);
+            if (NUM_QUIZ_QUESTIONS_TO_GENERATE !== NUM_QUIZ_QUESTIONS) {
+              const sliceIndex =
+                NUM_QUIZ_QUESTIONS_TO_GENERATE - NUM_QUIZ_QUESTIONS;
+              //keep only the questions from the sliceIndex to the end of the array
+              quizQuestions = questions.slice(sliceIndex, questions.length - 1);
+            } else {
+              quizQuestions = questions;
+            }
             console.log("final quiz questions", quizQuestions);
           }
         }
       }
-      console.log();
       res.write(
         JSON.stringify({
           message: "Quiz questions generated",
@@ -543,12 +558,10 @@ app.post("/api/transcribeEpisode", async (req, res) => {
         })
       );
     }
-    // console.log("end getFileSize");
-    //MH TODO: rename function
   };
 
   await generateTranscriptions();
-  console.log("end transcribeEpisode");
+  console.log("end transcribeEpisode", transcription);
   return res.end();
 });
 

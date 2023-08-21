@@ -23,11 +23,6 @@ export function EpisodeResults({
 
   useEffect(() => {
     if (episode && episode !== "") {
-      // handleSetStatusMessage({
-      //   message: "Retrieving audio from episode...",
-      //   type: "info",
-      // });
-
       handleSetFilePath(episode);
     }
   }, [episode]);
@@ -79,10 +74,7 @@ export function EpisodeResults({
                   console.log("too long!");
                   llmReady = false;
                 } else {
-                  // handleSetStatusMessage({
-                  //   message: "LLM ready",
-                  //   type: "info",
-                  // });
+                  //MH TODO: find out under all the conditions this fires - LLM is not always ready here.
                   llmReady = true;
                 }
               }
@@ -103,7 +95,7 @@ export function EpisodeResults({
       .catch((err) => {
         console.log("err", err);
         handleSetStatusMessage({
-          message: "Unexpected error! My bad...",
+          message: "Unexpected error!",
           type: "info",
         });
       });
