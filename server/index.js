@@ -465,14 +465,13 @@ app.post("/api/transcribeEpisode", async (req, res) => {
         const outputPaths = await splitAudioIntoChunks(filePath);
 
         const transcriptionsPromises = outputPaths.map(async (outputPath) => {
+          //MH TODO: may need to account for order in which these get transcribed if it's getting messed up.
           return transcribeAudio(outputPath, mode);
         });
 
         const chunkedTranscripts = await Promise.all(transcriptionsPromises);
 
         transcription = chunkedTranscripts.join(""); // Combine all chunk transcripts
-        console.log("transcription", transcription);
-
         //TODO: need to adjust transcript timestamps to account for chunking
 
         //remove chunked audio
@@ -561,7 +560,7 @@ app.post("/api/transcribeEpisode", async (req, res) => {
   };
 
   await generateTranscriptions();
-  console.log("end transcribeEpisode", transcription);
+  console.log("transcription", transcription);
   return res.end();
 });
 
