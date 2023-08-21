@@ -78,14 +78,13 @@ export function EpisodeResults({
                 ) {
                   console.log("too long!");
                   llmReady = false;
+                } else {
+                  // handleSetStatusMessage({
+                  //   message: "LLM ready",
+                  //   type: "info",
+                  // });
+                  llmReady = true;
                 }
-                // else {
-                //   handleSetStatusMessage({
-                //     message: "LLM ready",
-                //     type: "info",
-                //   });
-                //   llmReady = true;
-                // }
               }
             });
 

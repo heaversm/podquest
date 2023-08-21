@@ -5,6 +5,9 @@ import Container from "@mui/material/Container";
 import { deepPurple, amber, blueGrey } from "@mui/material/colors";
 const colorSubtext = blueGrey[400];
 
+const disclaimer =
+  "NOTE: The site is SLOW. Downloading, transcribing, and training an LLM on your search takes a lot of work. If things seem stuck, just give it a minute. Pet your cat. Breathe. Grab a snack...";
+
 export function PageIntro() {
   return (
     <>
@@ -28,8 +31,7 @@ export function PageIntro() {
           Answers to any question about your favorite podcast episodes
         </Typography>
         <Typography variant="caption" align="center" display="block">
-          Note: I can only transcribe podcasts of around 20MB currently (I
-          know...). I'm working on it!
+          {disclaimer}
         </Typography>
       </Container>
     </>

@@ -8,6 +8,7 @@ export function QueryForm({
   llmReady,
   handleSetQueryResults,
   handleSetStatusMessage,
+  handleSetTotalPoints,
   quizQuestion,
   quizQuestions,
   mode,
@@ -15,6 +16,10 @@ export function QueryForm({
   const [query, setQuery] = React.useState("");
   const [totalPoints, setTotalPoints] = useState(0); //current quiz question
   const [quizText, setQuizText] = useState("");
+
+  useEffect(() => {
+    handleSetTotalPoints(totalPoints);
+  }, [totalPoints]);
 
   const handleQuerySearch = (e) => {
     e.preventDefault();

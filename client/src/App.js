@@ -59,6 +59,8 @@ function App() {
   const [timeStamp, setTimestamp] = useState(null); //timestamp of audio file
   const [quizQuestions, setQuizQuestions] = useState([]);
   const [quizQuestion, setCurQuizQuestion] = useState(null); //current quiz question
+  const [gameOver, setGameOver] = useState(false);
+  const [totalPoints, setTotalPoints] = useState(0);
 
   const handleStatusClose = (event, reason) => {
     if (reason === "clickaway") {
@@ -86,9 +88,9 @@ function App() {
       } else {
         console.log("game over");
         //TODO:MH - show game over message
+        setGameOver(true);
       }
     }
-    
   };
 
   const handleSetLLMReady = (llmReady) => {
@@ -110,6 +112,10 @@ function App() {
   const handleSetQuizQuestions = (questions) => {
     // console.log("setting quiz questions", questions);
     setQuizQuestions(questions);
+  };
+
+  const handleSetTotalPoints = (points) => {
+    setTotalPoints(points);
   };
 
   useEffect(() => {
@@ -247,14 +253,28 @@ function App() {
                     {queryResults && queryResults.length > 0 && (
                       <QueryResults queryResults={queryResults} />
                     )}
+
                     <QueryForm
                       llmReady={llmReady}
                       handleSetQueryResults={handleSetQueryResults}
                       handleSetStatusMessage={handleSetStatusMessage}
+                      handleSetTotalPoints={handleSetTotalPoints}
                       quizQuestion={quizQuestion}
                       quizQuestions={quizQuestions}
                       mode={mode}
                     />
+                    {gameOver && (
+                      <Typography
+                        component="h4"
+                        variant="h5"
+                        align="center"
+                        color="primary.main"
+                        gutterBottom
+                        sx={{ mb: 2 }}
+                      >
+                        Game Over!
+                      </Typography>
+                    )}
                   </Box>
                 ) : (
                   <>
