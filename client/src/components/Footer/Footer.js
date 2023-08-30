@@ -7,7 +7,7 @@ const colorSubtext = blueGrey[400];
 
 export function Footer() {
   const disclaimer =
-    "NOTE: Downloading, transcribing, and training an LLM on your search CAN TAKE SEVERAL minutes. Relax. Pet your dog. Grab a snack, Breathe...";
+    "NOTE: Downloading, transcribing, and training an LLM on your search CAN TAKE SEVERAL MINUTES. Relax. Pet your dog. Grab a snack!";
 
   return (
     <Container maxWidth="sm">

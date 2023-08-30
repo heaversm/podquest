@@ -575,15 +575,14 @@ const removeFile = async (filePath) => {
           //TODO: need to adjust transcript timestamps to account for chunking
           const adjustedTranscript = adjustTranscript(transcription);
           transcription = adjustedTranscript;
-          console.log("transcription", transcription);
+          // console.log("transcription", transcription);
 
-          // //remove chunked audio
-          // outputPaths.forEach((outputPath) => {
-          //   removeFile(outputPath);
-          // });
-          // //remove original audio
-          // removeFile(filePath);
-          // throw new Error("Not implemented");
+          //remove chunked audio
+          outputPaths.forEach((outputPath) => {
+            removeFile(outputPath);
+          });
+          //remove original audio
+          removeFile(filePath);
         } catch (error) {
           console.log("error splitting audio", error);
         }
@@ -614,7 +613,7 @@ const removeFile = async (filePath) => {
 
       if (mode === "quiz") {
         res.write(JSON.stringify({ message: "Generating quiz questions" }));
-        let query = `You are a college teacher. what are the most important ${NUM_QUIZ_QUESTIONS_TO_GENERATE} questions you could ask a student about the concepts in the podcast to see if they understood. Do not include any information about promotional sponsors or advertisements. Do not ask questions about people or business names. Pick all your questions from the text in the middle of the podcast. Do not pick questions from the beginning or end of the podcast.`;
+        let query = `You are a college teacher, asking college students questions about the stories mentioned in the podcast whose answers summarize the key topics. Be creative. Generate 5 quiz questions.`;
 
         if (USE_ONLY_SUMMARY) {
           //MH - currently fails because output is not returned from establishLLM
