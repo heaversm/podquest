@@ -33,6 +33,11 @@ export function EpisodeResults({
     console.log(episodeUrl);
     setEpisode(episodeUrl);
 
+    handleSetStatusMessage({
+      message: "Fetching audio...",
+      type: "info",
+    });
+
     fetch("/api/transcribeEpisode", {
       method: "POST",
       headers: {

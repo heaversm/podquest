@@ -31,6 +31,7 @@ import { QueryResults } from "./components/Query/QueryResults";
 import { PageIntro } from "./components/Header/PageIntro";
 import { ModeSelector } from "./components/Header/ModeSelector";
 import { Footer } from "./components/Footer/Footer";
+import { Feedback } from "./components/Feedback/Feedback";
 
 //colors:
 // https://mui.com/material-ui/customization/color/#color-palette
@@ -103,7 +104,12 @@ function App() {
   };
 
   const handleSetMode = (mode) => {
-    setMode(`${mode}`);
+    if (mode === null) {
+      setMode(null);
+      setStatusMessage(null);
+    } else {
+      setMode(`${mode}`);
+    }
   };
 
   const handleSetFilePath = (path) => {
@@ -204,10 +210,12 @@ function App() {
           }}
         >
           <Container maxWidth="md">
-            <PageIntro handleSetMode={handleSetMode} />
-            {!mode ? (
-              <ModeSelector handleSetMode={handleSetMode} />
-            ) : (
+            <PageIntro
+              handleSetMode={handleSetMode}
+              handleSetStatusMessage={handleSetStatusMessage}
+            />
+            {!mode && <ModeSelector handleSetMode={handleSetMode} />}
+            {mode && (
               <Box align="center" className="formContainer" sx={{ mt: 8 }}>
                 {llmReady ? (
                   <Box sx={{ mt: 8 }}>
@@ -222,7 +230,9 @@ function App() {
                       Step 2:{" "}
                       {mode === "quiz" && quizQuestion
                         ? "Answer Questions"
-                        : "Get Answers"}
+                        : mode === "audio"
+                        ? "Jump to the good parts"
+                        : "Get answers"}
                     </Typography>
                     {queryResults && queryResults.length > 0 && (
                       <QueryResults queryResults={queryResults} />
@@ -301,35 +311,7 @@ function App() {
           </Container>
         )}
         <Footer />
-        <Container maxWidth="md" sx={{ py: 4 }}>
-          <Box
-            maxWidth="md"
-            sx={{
-              display: "flex",
-              justifyContent: "center",
-              flexDirection: "column",
-              alignItems: "center",
-            }}
-          >
-            <Typography variant="h6" component="h4">
-              Thoughts?
-            </Typography>
-            <Typography>
-              <Link
-                color={deepPurple[700]}
-                href="https://docs.google.com/forms/d/10qZrQpWpTjVul9fgbLVvC-b563xlu_xQRbREy1OwbaE/edit#settings"
-              >
-                {" "}
-                Take the survey
-              </Link>
-              , or contact{" "}
-              <Link href="mailto:mheavers@mozilla.com?subject='Podquest'">
-                mheavers@mozilla.com
-              </Link>{" "}
-              or @mheavers on Slack.
-            </Typography>
-          </Box>
-        </Container>
+        <Feedback />
         {statusMessage && (
           <Snackbar
             className="statusContainer"

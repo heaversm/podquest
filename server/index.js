@@ -43,6 +43,7 @@ const USE_ONLY_SUMMARY = false; //ask questions only pertaining to the summary
 const RESPOND_YES_NO = false; //respond with only yes or no
 const BE_CONCISE = false; //be concise in your response
 const USE_ONLY_CONTEXT = false;
+const FORCE_SRT = true; //allows us to avoid refreshing the page and re-transcribe when true, but means other modes must navigate timestamps
 
 const MAX_FILE_SIZE = 20; //in MB. If a podcast is over this size, split it up
 const MAX_DURATION = 600; //in seconds, if splitting by duration instead of size (not currently used?)
@@ -73,7 +74,14 @@ const transcribeAudio = async (filePath, mode) => {
     return transcript;
     // return JSON.stringify(transcript);
   } else {
-    const transcriptionFormat = mode === "audio" ? "srt" : "text";
+    // const transcriptionFormat = mode === "audio" ? "srt" : "text";
+    let transcriptionFormat;
+    if (FORCE_SRT) {
+      transcriptionFormat = "srt";
+    } else {
+      transcriptionFormat = mode === "audio" ? "srt" : "text";
+    }
+
     // console.log("filePath", filePath, transcriptionFormat);
     transcript = await openai
       .createTranscription(
@@ -435,239 +443,238 @@ const removeFile = async (filePath) => {
   }
 };
 
+function adjustTranscript(originalTranscript) {
+  const modifiedTranscript = originalTranscript.replace(/^\s*$/gm, "");
 
-  function adjustTranscript(originalTranscript) {
-    const modifiedTranscript = originalTranscript.replace(/^\s*$/gm, "");
+  // console.log(modifiedTranscript);
 
-    // console.log(modifiedTranscript);
+  const newTranscript = modifiedTranscript.trim().split("\n\n");
+  //console.log(newTranscript);
 
-    const newTranscript = modifiedTranscript.trim().split("\n\n");
-    //console.log(newTranscript);
+  const newTranscriptEntries = [];
 
-    const newTranscriptEntries = [];
+  newTranscript.map((entry) => {
+    const lines = entry.split("\n");
+    newTranscriptEntries.push(lines);
+  });
 
-    newTranscript.map((entry) => {
-      const lines = entry.split("\n");
-      newTranscriptEntries.push(lines);
-    });
+  let lineCounter = 1;
+  let adjustModeIndex;
+  let finalTranscript = [];
 
-    let lineCounter = 1;
-    let adjustModeIndex;
-    let finalTranscript = [];
-
-    function timeToMillis(time) {
-      const [hours, minutes, seconds, milliseconds] = time.split(/[:,.]/);
-      return (
-        parseInt(hours) * 3600000 +
-        parseInt(minutes) * 60000 +
-        parseInt(seconds) * 1000 +
-        parseInt(milliseconds)
-      );
-    }
-
-    function millisToTime(millis) {
-      const date = new Date(millis);
-      return date.toISOString().substr(11, 12).replace(".", ",");
-    }
-
-    newTranscriptEntries.forEach((entry, index) => {
-      const entryIndex = parseInt(entry[0]);
-      if (index === 0) {
-        // console.log(entry);
-        finalTranscript.push(entry);
-      }
-      if (index !== 0) {
-        const prevIndex = parseInt(newTranscriptEntries[index - 1][0]);
-        // console.log(prevIndex, entryIndex);
-        if (entryIndex - prevIndex !== 1 && !adjustModeIndex) {
-          // console.log("adjusts mode",index);
-          adjustModeIndex = index;
-        }
-
-        if (adjustModeIndex) {
-          const prevEntry = newTranscriptEntries[index - 1]; //
-          // console.log(prevEntry);
-
-          const prevLine = parseInt(prevEntry[0]);
-          entry[0] = `${prevLine + 1}`;
-
-          const prevTime = prevEntry[1];
-          const prevTimestamps = prevTime.split(" --> ");
-          const prevEndTime = prevTimestamps[1];
-          // console.log(prevEndTime);
-          const curTime = newTranscriptEntries[index][1];
-          const curTimestamps = curTime.split(" --> ");
-          // console.log(curTimestamps);
-
-          const offsetMillis = timeToMillis(prevEndTime);
-          const startMillis = timeToMillis(curTimestamps[0]);
-          const endMillis = timeToMillis(curTimestamps[1]);
-          const diffMillis = endMillis - startMillis;
-          // console.log(offsetMillis, startMillis, endMillis);
-
-          const adjustedStart = offsetMillis;
-          const adjustedEnd = adjustedStart + diffMillis;
-          // console.log(adjustedStart, adjustedEnd);
-          const adjustedTimeStart = millisToTime(adjustedStart);
-          const adjustedTimeEnd = millisToTime(adjustedEnd);
-          // console.log(adjustedTimeStart, adjustedTimeEnd);
-          const joinedTimestampString = [
-            adjustedTimeStart,
-            adjustedTimeEnd,
-          ].join(" --> ");
-          // console.log(joinedTimestampString);
-          entry[1] = joinedTimestampString;
-          // console.log(entry);
-          finalTranscript.push(entry);
-        } else {
-          finalTranscript.push(entry);
-        }
-      }
-    });
-
-    const formattedTranscript = finalTranscript
-      .map((array) => array.join("\n"))
-      .join("\n\n");
-    // console.log(formattedTranscript);
-    return formattedTranscript;
+  function timeToMillis(time) {
+    const [hours, minutes, seconds, milliseconds] = time.split(/[:,.]/);
+    return (
+      parseInt(hours) * 3600000 +
+      parseInt(minutes) * 60000 +
+      parseInt(seconds) * 1000 +
+      parseInt(milliseconds)
+    );
   }
 
-  app.post("/api/transcribeEpisode", async (req, res) => {
-    const { episodeUrl, mode } = req.body;
-    console.log(episodeUrl, "episodeURL");
-    let filePath;
-    if (LOAD_AUDIO_FROM_FILE) {
-      filePath = path.join(__dirname, "../audio.mp3");
-    } else {
+  function millisToTime(millis) {
+    const date = new Date(millis);
+    return date.toISOString().substr(11, 12).replace(".", ",");
+  }
+
+  newTranscriptEntries.forEach((entry, index) => {
+    const entryIndex = parseInt(entry[0]);
+    if (index === 0) {
+      // console.log(entry);
+      finalTranscript.push(entry);
+    }
+    if (index !== 0) {
+      const prevIndex = parseInt(newTranscriptEntries[index - 1][0]);
+      // console.log(prevIndex, entryIndex);
+      if (entryIndex - prevIndex !== 1 && !adjustModeIndex) {
+        // console.log("adjusts mode",index);
+        adjustModeIndex = index;
+      }
+
+      if (adjustModeIndex) {
+        const prevEntry = newTranscriptEntries[index - 1]; //
+        // console.log(prevEntry);
+
+        const prevLine = parseInt(prevEntry[0]);
+        entry[0] = `${prevLine + 1}`;
+
+        const prevTime = prevEntry[1];
+        const prevTimestamps = prevTime.split(" --> ");
+        const prevEndTime = prevTimestamps[1];
+        // console.log(prevEndTime);
+        const curTime = newTranscriptEntries[index][1];
+        const curTimestamps = curTime.split(" --> ");
+        // console.log(curTimestamps);
+
+        const offsetMillis = timeToMillis(prevEndTime);
+        const startMillis = timeToMillis(curTimestamps[0]);
+        const endMillis = timeToMillis(curTimestamps[1]);
+        const diffMillis = endMillis - startMillis;
+        // console.log(offsetMillis, startMillis, endMillis);
+
+        const adjustedStart = offsetMillis;
+        const adjustedEnd = adjustedStart + diffMillis;
+        // console.log(adjustedStart, adjustedEnd);
+        const adjustedTimeStart = millisToTime(adjustedStart);
+        const adjustedTimeEnd = millisToTime(adjustedEnd);
+        // console.log(adjustedTimeStart, adjustedTimeEnd);
+        const joinedTimestampString = [adjustedTimeStart, adjustedTimeEnd].join(
+          " --> "
+        );
+        // console.log(joinedTimestampString);
+        entry[1] = joinedTimestampString;
+        // console.log(entry);
+        finalTranscript.push(entry);
+      } else {
+        finalTranscript.push(entry);
+      }
+    }
+  });
+
+  const formattedTranscript = finalTranscript
+    .map((array) => array.join("\n"))
+    .join("\n\n");
+  // console.log(formattedTranscript);
+  return formattedTranscript;
+}
+
+app.post("/api/transcribeEpisode", async (req, res) => {
+  const { episodeUrl, mode } = req.body;
+  console.log(episodeUrl, "episodeURL");
+  let filePath;
+  if (LOAD_AUDIO_FROM_FILE) {
+    filePath = path.join(__dirname, "../audio.mp3");
+  } else {
+    try {
+      filePath = await getAudioFromURL(episodeUrl);
+    } catch (error) {
+      console.log("error getting audio file", error);
+      return res.status(500).json({ error: error });
+    }
+  }
+
+  //MH TODO: check file size
+  const generateTranscriptions = async () => {
+    const stats = await statAsync(filePath);
+
+    const fileSizeInMB = stats.size / 1024 / 1024;
+    console.log("fs in MB", fileSizeInMB, "max", MAX_FILE_SIZE);
+
+    res.write(JSON.stringify({ message: "Audio Received - Transcribing..." }));
+
+    if (fileSizeInMB > MAX_FILE_SIZE) {
+      console.log("file size too large, splitting audio");
       try {
-        filePath = await getAudioFromURL(episodeUrl);
+        const outputPaths = await splitAudioIntoChunks(filePath);
+
+        const transcriptionsPromises = outputPaths.map(async (outputPath) => {
+          //MH TODO: may need to account for order in which these get transcribed if it's getting messed up.
+          return transcribeAudio(outputPath, mode);
+        });
+
+        const chunkedTranscripts = await Promise.all(transcriptionsPromises);
+
+        transcription = chunkedTranscripts.join(""); // Combine all chunk transcripts
+
+        //TODO: need to adjust transcript timestamps to account for chunking
+        const adjustedTranscript = adjustTranscript(transcription);
+        transcription = adjustedTranscript;
+        // console.log("transcription", transcription);
+
+        //remove chunked audio
+        outputPaths.forEach((outputPath) => {
+          removeFile(outputPath);
+        });
+        //remove original audio
+        removeFile(filePath);
       } catch (error) {
-        console.log("error getting audio file", error);
+        console.log("error splitting audio", error);
+      }
+    } else {
+      console.log("file size ok");
+      try {
+        transcription = await transcribeAudio(filePath, mode);
+      } catch (error) {
+        console.log("error transcribing audio", error);
         return res.status(500).json({ error: error });
+      }
+
+      const removeResult = removeFile(filePath);
+      if (removeResult.status === "error") {
+        console.error(removeResult.error);
+        return res.status(500).json({ error: removeResult.error });
       }
     }
 
-    //MH TODO: check file size
-    const generateTranscriptions = async () => {
-      const stats = await statAsync(filePath);
+    res.write(
+      JSON.stringify({
+        message: "Transcription Created - Creating Embeddings",
+      })
+    );
 
-      const fileSizeInMB = stats.size / 1024 / 1024;
-      console.log("fs in MB", fileSizeInMB, "max", MAX_FILE_SIZE);
+    console.log("establishing llm");
+    const output = await establishLLM(transcription, mode);
 
-      res.write(
-        JSON.stringify({ message: "Audio Received - Transcribing..." })
-      );
+    if (mode === "quiz") {
+      res.write(JSON.stringify({ message: "Generating quiz questions" }));
+      let query = `You are a college teacher, asking college students questions about the stories mentioned in the podcast whose answers summarize the key topics. Be creative. Generate 5 quiz questions.`;
 
-      if (fileSizeInMB > MAX_FILE_SIZE) {
-        console.log("file size too large, splitting audio");
-        try {
-          const outputPaths = await splitAudioIntoChunks(filePath);
+      if (USE_ONLY_SUMMARY) {
+        //MH - currently fails because output is not returned from establishLLM
+        summarizer = loadSummarizationChain(llm, { type: "map_reduce" }); //stuff, map_reduce, refine
+        const summary = await summarizer.call({
+          input_documents: output,
+        });
+        console.log("summary", summary);
 
-          const transcriptionsPromises = outputPaths.map(async (outputPath) => {
-            //MH TODO: may need to account for order in which these get transcribed if it's getting messed up.
-            return transcribeAudio(outputPath, mode);
-          });
-
-          const chunkedTranscripts = await Promise.all(transcriptionsPromises);
-
-          transcription = chunkedTranscripts.join(""); // Combine all chunk transcripts
-
-          //TODO: need to adjust transcript timestamps to account for chunking
-          const adjustedTranscript = adjustTranscript(transcription);
-          transcription = adjustedTranscript;
-          // console.log("transcription", transcription);
-
-          //remove chunked audio
-          outputPaths.forEach((outputPath) => {
-            removeFile(outputPath);
-          });
-          //remove original audio
-          removeFile(filePath);
-        } catch (error) {
-          console.log("error splitting audio", error);
-        }
-      } else {
-        console.log("file size ok");
-        try {
-          transcription = await transcribeAudio(filePath, mode);
-        } catch (error) {
-          console.log("error transcribing audio", error);
-          return res.status(500).json({ error: error });
-        }
-
-        const removeResult = removeFile(filePath);
-        if (removeResult.status === "error") {
-          console.error(removeResult.error);
-          return res.status(500).json({ error: removeResult.error });
-        }
+        query += ` Use only this summary to generate the questions: ${summary}`;
       }
 
-      res.write(
-        JSON.stringify({
-          message: "Transcription Created - Creating Embeddings",
-        })
-      );
+      const quizQuestionsResponse = await chain.call({
+        query: query,
+      });
+      console.log("all quiz questions", quizQuestionsResponse.text);
 
-      console.log("establishing llm");
-      const output = await establishLLM(transcription, mode);
-
-      if (mode === "quiz") {
-        res.write(JSON.stringify({ message: "Generating quiz questions" }));
-        let query = `You are a college teacher, asking college students questions about the stories mentioned in the podcast whose answers summarize the key topics. Be creative. Generate 5 quiz questions.`;
-
-        if (USE_ONLY_SUMMARY) {
-          //MH - currently fails because output is not returned from establishLLM
-          summarizer = loadSummarizationChain(llm, { type: "map_reduce" }); //stuff, map_reduce, refine
-          const summary = await summarizer.call({
-            input_documents: output,
-          });
-          console.log("summary", summary);
-
-          query += ` Use only this summary to generate the questions: ${summary}`;
-        }
-
-        const quizQuestionsResponse = await chain.call({
-          query: query,
-        });
-        console.log("all quiz questions", quizQuestionsResponse.text);
-
-        if (quizQuestionsResponse?.text) {
-          const inputText = quizQuestionsResponse.text;
-          const lines = inputText.split("\n");
-          if (lines.length > 0) {
-            const questions = lines
-              .map((line) => line.trim()) // Remove leading/trailing whitespace
-              .filter((line) => line.length > 0) // Filter out empty lines
-              .filter((line) => /^\d+\.\s/.test(line)) // Filter lines that start with a number and a period
-              .map((line) => line.replace(/^\d+\.\s/, "")); // Remove the numbering
-            if (questions.length > 0) {
-              if (NUM_QUIZ_QUESTIONS_TO_GENERATE !== NUM_QUIZ_QUESTIONS) {
-                const sliceIndex =
-                  NUM_QUIZ_QUESTIONS_TO_GENERATE - NUM_QUIZ_QUESTIONS;
-                //keep only the questions from the sliceIndex to the end of the array
-                quizQuestions = questions.slice(
-                  sliceIndex,
-                  questions.length - 1
-                );
-              } else {
-                quizQuestions = questions;
-              }
-              console.log("final quiz questions", quizQuestions);
+      if (quizQuestionsResponse?.text) {
+        const inputText = quizQuestionsResponse.text;
+        const lines = inputText.split("\n");
+        if (lines.length > 0) {
+          const questions = lines
+            .map((line) => line.trim()) // Remove leading/trailing whitespace
+            .filter((line) => line.length > 0) // Filter out empty lines
+            .filter((line) => /^\d+\.\s/.test(line)) // Filter lines that start with a number and a period
+            .map((line) => line.replace(/^\d+\.\s/, "")); // Remove the numbering
+          if (questions.length > 0) {
+            if (NUM_QUIZ_QUESTIONS_TO_GENERATE !== NUM_QUIZ_QUESTIONS) {
+              const sliceIndex =
+                NUM_QUIZ_QUESTIONS_TO_GENERATE - NUM_QUIZ_QUESTIONS;
+              //keep only the questions from the sliceIndex to the end of the array
+              quizQuestions = questions.slice(sliceIndex, questions.length - 1);
+            } else {
+              quizQuestions = questions;
             }
+            console.log("final quiz questions", quizQuestions);
           }
         }
-        res.write(
-          JSON.stringify({
-            message: "Quiz questions generated",
-            quizQuestions: quizQuestions,
-          })
-        );
       }
-    };
+      res.write(
+        JSON.stringify({
+          message: "Quiz questions generated",
+          quizQuestions: quizQuestions,
+        })
+      );
+    } else {
+      res.write(
+        JSON.stringify({
+          message: "LLM Ready",
+        })
+      );
+    }
+  };
 
-    await generateTranscriptions();
-    return res.end();
-  });
+  await generateTranscriptions();
+  return res.end();
+});
 
 // All other GET requests not handled before will return our React app
 app.get("*", (req, res) => {
