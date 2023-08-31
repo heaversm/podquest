@@ -10,7 +10,7 @@ import Box from "@mui/material/Box";
 import { Typography } from "@mui/material";
 import { TypeAnimation } from "react-type-animation";
 
-export function QueryResults({ queryResults }) {
+export function QueryResults({ queryResults, gameOver }) {
   const [queryDisplay, setQueryDisplay] = useState();
 
   useEffect(() => {

@@ -107,6 +107,8 @@ function App() {
     if (mode === null) {
       setMode(null);
       setStatusMessage(null);
+      setGameOver(false);
+      setQueryResults([]);
     } else {
       setMode(`${mode}`);
     }
@@ -235,18 +237,13 @@ function App() {
                         : "Get answers"}
                     </Typography>
                     {queryResults && queryResults.length > 0 && (
-                      <QueryResults queryResults={queryResults} />
+                      <QueryResults
+                        queryResults={queryResults}
+                        gameOver={gameOver}
+                      />
                     )}
-                    <QueryForm
-                      llmReady={llmReady}
-                      handleSetQueryResults={handleSetQueryResults}
-                      handleSetStatusMessage={handleSetStatusMessage}
-                      handleSetTotalPoints={handleSetTotalPoints}
-                      quizQuestion={quizQuestion}
-                      quizQuestions={quizQuestions}
-                      mode={mode}
-                    />
-                    {gameOver && (
+
+                    {gameOver ? (
                       <Typography
                         component="h4"
                         variant="h5"
@@ -257,6 +254,17 @@ function App() {
                       >
                         Game Over! You scored {totalPoints} points.
                       </Typography>
+                    ) : (
+                      <QueryForm
+                        llmReady={llmReady}
+                        handleSetQueryResults={handleSetQueryResults}
+                        handleSetStatusMessage={handleSetStatusMessage}
+                        handleSetTotalPoints={handleSetTotalPoints}
+                        quizQuestion={quizQuestion}
+                        quizQuestions={quizQuestions}
+                        mode={mode}
+                        gameOver={gameOver}
+                      />
                     )}
                   </Box>
                 ) : (

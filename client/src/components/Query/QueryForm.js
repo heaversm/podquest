@@ -12,6 +12,7 @@ export function QueryForm({
   quizQuestion,
   quizQuestions,
   mode,
+  gameOver,
 }) {
   const [query, setQuery] = React.useState("");
   const [totalPoints, setTotalPoints] = useState(0); //current quiz question
@@ -47,6 +48,8 @@ export function QueryForm({
               type: data.isCorrect ? "success" : "error",
             });
           }
+        } else {
+          handleSetStatusMessage(null);
         }
         handleSetQueryResults(data.text);
       })

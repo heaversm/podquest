@@ -615,66 +615,67 @@ app.post("/api/transcribeEpisode", async (req, res) => {
     console.log("establishing llm");
     const output = await establishLLM(transcription, mode);
 
-    if (mode === "quiz") {
-      res.write(JSON.stringify({ message: "Generating quiz questions" }));
-      let query = `You are a college teacher, asking college students questions about the stories mentioned in the podcast whose answers summarize the key topics. Be creative. Generate 5 quiz questions.`;
+    // if (mode === "quiz") {
+    res.write(JSON.stringify({ message: "Generating quiz questions" }));
+    let query = `You are a college teacher, asking college students questions about the stories mentioned in the podcast whose answers summarize the key topics. Be creative. Generate 5 quiz questions.`;
 
-      if (USE_ONLY_SUMMARY) {
-        //MH - currently fails because output is not returned from establishLLM
-        summarizer = loadSummarizationChain(llm, { type: "map_reduce" }); //stuff, map_reduce, refine
-        const summary = await summarizer.call({
-          input_documents: output,
-        });
-        console.log("summary", summary);
-
-        query += ` Use only this summary to generate the questions: ${summary}`;
-      }
-
-      const quizQuestionsResponse = await chain.call({
-        query: query,
+    if (USE_ONLY_SUMMARY) {
+      //MH - currently fails because output is not returned from establishLLM
+      summarizer = loadSummarizationChain(llm, { type: "map_reduce" }); //stuff, map_reduce, refine
+      const summary = await summarizer.call({
+        input_documents: output,
       });
-      console.log("all quiz questions", quizQuestionsResponse.text);
+      console.log("summary", summary);
 
-      if (quizQuestionsResponse?.text) {
-        const inputText = quizQuestionsResponse.text;
-        const lines = inputText.split("\n");
-        if (lines.length > 0) {
-          const questions = lines
-            .map((line) => line.trim()) // Remove leading/trailing whitespace
-            .filter((line) => line.length > 0) // Filter out empty lines
-            .filter((line) => /^\d+\.\s/.test(line)) // Filter lines that start with a number and a period
-            .map((line) => line.replace(/^\d+\.\s/, "")); // Remove the numbering
-          if (questions.length > 0) {
-            if (NUM_QUIZ_QUESTIONS_TO_GENERATE !== NUM_QUIZ_QUESTIONS) {
-              const sliceIndex =
-                NUM_QUIZ_QUESTIONS_TO_GENERATE - NUM_QUIZ_QUESTIONS;
-              //keep only the questions from the sliceIndex to the end of the array
-              quizQuestions = questions.slice(sliceIndex, questions.length - 1);
-            } else {
-              quizQuestions = questions;
-            }
-            console.log("final quiz questions", quizQuestions);
+      query += ` Use only this summary to generate the questions: ${summary}`;
+    }
+
+    const quizQuestionsResponse = await chain.call({
+      query: query,
+    });
+    console.log("all quiz questions", quizQuestionsResponse.text);
+
+    if (quizQuestionsResponse?.text) {
+      const inputText = quizQuestionsResponse.text;
+      const lines = inputText.split("\n");
+      if (lines.length > 0) {
+        const questions = lines
+          .map((line) => line.trim()) // Remove leading/trailing whitespace
+          .filter((line) => line.length > 0) // Filter out empty lines
+          .filter((line) => /^\d+\.\s/.test(line)) // Filter lines that start with a number and a period
+          .map((line) => line.replace(/^\d+\.\s/, "")); // Remove the numbering
+        if (questions.length > 0) {
+          if (NUM_QUIZ_QUESTIONS_TO_GENERATE !== NUM_QUIZ_QUESTIONS) {
+            const sliceIndex =
+              NUM_QUIZ_QUESTIONS_TO_GENERATE - NUM_QUIZ_QUESTIONS;
+            //keep only the questions from the sliceIndex to the end of the array
+            quizQuestions = questions.slice(sliceIndex, questions.length - 1);
+          } else {
+            quizQuestions = questions;
           }
+          console.log("final quiz questions", quizQuestions);
         }
       }
-      res.write(
-        JSON.stringify({
-          message: "Quiz questions generated",
-          quizQuestions: quizQuestions,
-        })
-      );
-    } else {
-      res.write(
-        JSON.stringify({
-          message: "LLM Ready",
-        })
-      );
     }
+    // res.write(
+    //   JSON.stringify({
+    //     message: "Quiz questions generated",
+    //     quizQuestions: quizQuestions,
+    //   })
+    // );
+    // } else {
+    res.write(
+      JSON.stringify({
+        message: "LLM Ready",
+        quizQuestions: quizQuestions,
+      })
+    );
+    // }
   };
 
   await generateTranscriptions();
   return res.end();
-});
+};);
 
 // All other GET requests not handled before will return our React app
 app.get("*", (req, res) => {
