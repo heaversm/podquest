@@ -657,25 +657,18 @@ app.post("/api/transcribeEpisode", async (req, res) => {
         }
       }
     }
-    // res.write(
-    //   JSON.stringify({
-    //     message: "Quiz questions generated",
-    //     quizQuestions: quizQuestions,
-    //   })
-    // );
-    // } else {
+
     res.write(
       JSON.stringify({
         message: "LLM Ready",
         quizQuestions: quizQuestions,
       })
     );
-    // }
   };
 
   await generateTranscriptions();
   return res.end();
-};);
+});
 
 // All other GET requests not handled before will return our React app
 app.get("*", (req, res) => {
