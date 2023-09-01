@@ -318,7 +318,7 @@ function App() {
             </Box>
           </Container>
         )}
-        <Footer />
+        <Footer llmReady={llmReady} />
         <Feedback />
         {statusMessage && (
           <Snackbar

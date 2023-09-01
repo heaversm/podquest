@@ -538,6 +538,11 @@ function adjustTranscript(originalTranscript) {
   return formattedTranscript;
 }
 
+app.get("/api/downloadTranscript", async (req, res) => {
+  // console.log("return transcript", transcription);
+  res.json({ transcription: transcription });
+});
+
 app.post("/api/transcribeEpisode", async (req, res) => {
   const { episodeUrl, mode } = req.body;
   console.log(episodeUrl, "episodeURL");
