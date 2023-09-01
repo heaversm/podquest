@@ -156,7 +156,6 @@ function App() {
     if (quizQuestions && quizQuestions.length > 0) {
       console.log("setting initial list of quiz questions");
       setCurQuizQuestion(0);
-      setStatusMessage(null);
     }
   }, [quizQuestions]);
 

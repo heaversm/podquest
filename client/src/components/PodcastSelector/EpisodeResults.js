@@ -47,13 +47,14 @@ export function EpisodeResults({
     })
       .then((res) => res.json())
       .then((data) => {
-        console.log("llm ready?");
+        // console.log("llm ready?");
         console.log(data);
         // handleSetLLMReady(llmReady)
         if (data.quizQuestions) {
           handleSetQuizQuestions(data.quizQuestions);
         }
         handleSetLLMReady(true);
+        handleSetStatusMessage(null);
       })
       .catch((err) => {
         console.log("err", err);

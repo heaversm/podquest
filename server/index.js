@@ -674,7 +674,7 @@ app.post("/api/transcribeEpisode", async (req, res) => {
 
   await generateTranscriptions();
   // return res.end();
-  console.log("generated");
+  console.log("generated", quizQuestions);
   return res.status(200).json({
     message: "LLM Ready",
     quizQuestions: quizQuestions,
