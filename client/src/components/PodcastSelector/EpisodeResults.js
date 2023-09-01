@@ -34,7 +34,7 @@ export function EpisodeResults({
     setEpisode(episodeUrl);
 
     handleSetStatusMessage({
-      message: "Fetching audio...",
+      message: "Transcribing audio, get comfortable...",
       type: "info",
     });
 
@@ -45,57 +45,15 @@ export function EpisodeResults({
       },
       body: JSON.stringify({ episodeUrl, mode }),
     })
-      .then(async (res) => {
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder("utf-8");
-        let chunk = "";
-
-        function read() {
-          return reader.read().then((data) => {
-            const { value, done } = data;
-            if (done) {
-              return;
-            }
-
-            chunk += decoder.decode(value, { stream: true });
-
-            const parts = chunk.split("\n");
-            parts.forEach((part) => {
-              if (part !== "") {
-                const jsonResponse = JSON.parse(part);
-                console.log(jsonResponse);
-                handleSetStatusMessage({
-                  message: jsonResponse.message,
-                  type: "info",
-                });
-
-                if (jsonResponse.quizQuestions) {
-                  //MH TODO: wait until llm ready?
-                  llmReady = true;
-                  handleSetQuizQuestions(jsonResponse.quizQuestions);
-                } else if (
-                  jsonResponse.message === "Podcast too long to transcribe"
-                ) {
-                  console.log("too long!");
-                  llmReady = false;
-                } else {
-                  //MH TODO: find out under all the conditions this fires - LLM is not always ready here.
-                  llmReady = true;
-                }
-              }
-            });
-
-            chunk = "";
-
-            return read();
-          });
+      .then((res) => res.json())
+      .then((data) => {
+        console.log("llm ready?");
+        console.log(data);
+        // handleSetLLMReady(llmReady)
+        if (data.quizQuestions) {
+          handleSetQuizQuestions(data.quizQuestions);
         }
-
-        return read();
-      })
-      .then(() => {
-        console.log("llm ready");
-        handleSetLLMReady(llmReady);
+        handleSetLLMReady(true);
       })
       .catch((err) => {
         console.log("err", err);

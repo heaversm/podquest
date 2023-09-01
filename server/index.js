@@ -565,7 +565,7 @@ app.post("/api/transcribeEpisode", async (req, res) => {
     const fileSizeInMB = stats.size / 1024 / 1024;
     console.log("fs in MB", fileSizeInMB, "max", MAX_FILE_SIZE);
 
-    res.write(JSON.stringify({ message: "Audio Received - Transcribing..." }));
+    // res.write(JSON.stringify({ message: "Audio Received - Transcribing..." }));
 
     if (fileSizeInMB > MAX_FILE_SIZE) {
       console.log("file size too large, splitting audio");
@@ -611,17 +611,17 @@ app.post("/api/transcribeEpisode", async (req, res) => {
       }
     }
 
-    res.write(
-      JSON.stringify({
-        message: "Transcription Created - Creating Embeddings",
-      })
-    );
+    // res.write(
+    //   JSON.stringify({
+    //     message: "Transcription Created - Creating Embeddings",
+    //   })
+    // );
 
     console.log("establishing llm");
     const output = await establishLLM(transcription, mode);
 
     // if (mode === "quiz") {
-    res.write(JSON.stringify({ message: "Generating quiz questions" }));
+    // res.write(JSON.stringify({ message: "Generating quiz questions" }));
     let query = `You are a college teacher, asking college students questions about the stories mentioned in the podcast whose answers summarize the key topics. Be creative. Generate 5 quiz questions.`;
 
     if (USE_ONLY_SUMMARY) {
@@ -663,16 +663,23 @@ app.post("/api/transcribeEpisode", async (req, res) => {
       }
     }
 
-    res.write(
-      JSON.stringify({
-        message: "LLM Ready",
-        quizQuestions: quizQuestions,
-      })
-    );
+    // res.write(
+    //   JSON.stringify({
+    //     message: "LLM Ready",
+    //     quizQuestions: quizQuestions,
+    //   })
+    // );
+    return;
   };
 
   await generateTranscriptions();
-  return res.end();
+  // return res.end();
+  console.log("generated");
+  return res.status(200).json({
+    message: "LLM Ready",
+    quizQuestions: quizQuestions,
+  });
+
 });
 
 // All other GET requests not handled before will return our React app
