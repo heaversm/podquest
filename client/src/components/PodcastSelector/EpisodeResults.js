@@ -27,10 +27,26 @@ export function EpisodeResults({
     }
   }, [episode]);
 
+  const handleFetchQuizQuestions = (e) => {
+    fetch("/api/getQuizQuestions", {
+      method: "GET",
+    })
+      .then((res) => {
+        return res.json();
+      })
+      .then((data) => {
+        // console.log("quizQuestions", data.quizQuestions);
+        handleSetQuizQuestions(data.quizQuestions);
+      })
+      .catch((err) => {
+        console.log("err", err);
+      });
+  };
+
   const handleEpisodeChange = (e) => {
     e.preventDefault();
     const episodeUrl = e.target.value;
-    console.log(episodeUrl);
+    // console.log(episodeUrl);
     setEpisode(episodeUrl);
 
     handleSetStatusMessage({
@@ -45,14 +61,9 @@ export function EpisodeResults({
       },
       body: JSON.stringify({ episodeUrl, mode }),
     })
-      .then((res) => res.json())
-      .then((data) => {
-        // console.log("llm ready?");
-        console.log(data);
-        // handleSetLLMReady(llmReady)
-        if (data.quizQuestions) {
-          handleSetQuizQuestions(data.quizQuestions);
-        }
+      .then(() => {
+        console.log("llm ready");
+        handleFetchQuizQuestions();
         handleSetLLMReady(true);
         handleSetStatusMessage({
           message: "LLM Ready!",

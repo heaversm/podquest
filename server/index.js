@@ -543,6 +543,11 @@ app.get("/api/downloadTranscript", async (req, res) => {
   res.json({ transcription: transcription });
 });
 
+app.get("/api/fetch", async (req, res) => {
+  // console.log("return transcript", transcription);
+  res.json({ transcription: transcription });
+});
+
 app.post("/api/transcribeEpisode", async (req, res) => {
   const { episodeUrl, mode } = req.body;
   console.log(episodeUrl, "episodeURL");
@@ -560,6 +565,12 @@ app.post("/api/transcribeEpisode", async (req, res) => {
 
   //MH TODO: check file size
   const generateTranscriptions = async () => {
+    //
+    let keepAliveTimer = setInterval(() => {
+      console.log("keep alive");
+      res.write("transcribing");
+    }, 20000);
+
     const stats = await statAsync(filePath);
 
     const fileSizeInMB = stats.size / 1024 / 1024;
@@ -662,24 +673,13 @@ app.post("/api/transcribeEpisode", async (req, res) => {
         }
       }
     }
-
-    // res.write(
-    //   JSON.stringify({
-    //     message: "LLM Ready",
-    //     quizQuestions: quizQuestions,
-    //   })
-    // );
+    clearInterval(keepAliveTimer);
     return;
   };
 
   await generateTranscriptions();
-  // return res.end();
-  console.log("generated", quizQuestions);
-  return res.status(200).json({
-    message: "LLM Ready",
-    quizQuestions: quizQuestions,
-  });
-
+  console.log("llm ready");
+  return res.end();
 });
 
 // All other GET requests not handled before will return our React app
