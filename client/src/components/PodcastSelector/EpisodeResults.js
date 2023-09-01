@@ -54,7 +54,10 @@ export function EpisodeResults({
           handleSetQuizQuestions(data.quizQuestions);
         }
         handleSetLLMReady(true);
-        handleSetStatusMessage(null);
+        handleSetStatusMessage({
+          message: "LLM Ready!",
+          type: "info",
+        });
       })
       .catch((err) => {
         console.log("err", err);
