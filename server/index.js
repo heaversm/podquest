@@ -51,6 +51,7 @@ const MAX_DURATION = 600; //in seconds, if splitting by duration instead of size
 
 const configuration = new Configuration({
   apiKey: process.env.OPENAI_API_KEY,
+  temperature: 0.8, //higher = more creative
 });
 const openai = new OpenAIApi(configuration);
 
@@ -62,6 +63,18 @@ let quizQuestions; //will hold the quiz questions if this mode is selected
 
 //llm
 import { OpenAI } from "langchain/llms/openai";
+
+const transcribeAudioChunks = async (outputPaths) => {
+  const transcripts = [];
+  for (let i = 0; i < outputPaths.length; i++) {
+    const outputPath = outputPaths[i];
+    const transcript = await transcribeAudio(outputPath, "audio");
+    transcripts.push(transcript);
+    console.log(`transcript ${i} generated`);
+  }
+  console.log("all transcripts generated");
+  return transcripts;
+};
 
 const transcribeAudio = async (filePath, mode) => {
   let transcript;
@@ -587,22 +600,23 @@ app.post("/api/transcribeEpisode", async (req, res) => {
         const outputPaths = await splitAudioIntoChunks(filePath);
 
         console.log("transcribing chunks");
+        const chunkedTranscripts = await transcribeAudioChunks(outputPaths);
 
-        const transcriptionsPromises = outputPaths.map(async (outputPath) => {
-          //MH TODO: may need to account for order in which these get transcribed if it's getting messed up.
-          return transcribeAudio(outputPath, mode);
-        });
+        // const transcriptionsPromises = outputPaths.map(async (outputPath) => {
+        //   //MH TODO: may need to account for order in which these get transcribed if it's getting messed up.
+        //   return transcribeAudio(outputPath, mode);
+        // });
 
-        const chunkedTranscripts = await Promise.all(transcriptionsPromises);
+        // const chunkedTranscripts = await Promise.all(transcriptionsPromises);
 
-        console.log("all transcripts generated");
+        console.log("all transcripts generated 2");
 
         transcription = chunkedTranscripts.join(""); // Combine all chunk transcripts
 
         //TODO: need to adjust transcript timestamps to account for chunking
         const adjustedTranscript = adjustTranscript(transcription);
         transcription = adjustedTranscript;
-        console.log("transcription", transcription);
+        console.log("final transcription", transcription);
 
         //remove chunked audio
         outputPaths.forEach((outputPath) => {
