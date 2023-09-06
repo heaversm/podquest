@@ -44,6 +44,7 @@ const RESPOND_YES_NO = false; //respond with only yes or no
 const BE_CONCISE = false; //be concise in your response
 const USE_ONLY_CONTEXT = false;
 const FORCE_SRT = true; //allows us to avoid refreshing the page and re-transcribe when true, but means other modes must navigate timestamps
+const USE_KEEP_ALIVE_TIMER = false;
 
 const MAX_FILE_SIZE = 20; //in MB. If a podcast is over this size, split it up
 const MAX_DURATION = 600; //in seconds, if splitting by duration instead of size (not currently used?)
@@ -609,10 +610,12 @@ app.post("/api/transcribeEpisode", async (req, res) => {
 
   //MH TODO: check file size
   const generateTranscriptions = async () => {
-    let keepAliveTimer = setInterval(() => {
-      console.log("keep alive");
-      res.write("");
-    }, 20000);
+    if (USE_KEEP_ALIVE_TIMER) {
+      let keepAliveTimer = setInterval(() => {
+        console.log("keep alive");
+        res.write("");
+      }, 20000);
+    }
 
     const stats = await statAsync(filePath);
 
@@ -713,13 +716,19 @@ app.post("/api/transcribeEpisode", async (req, res) => {
         }
       }
     }
-    clearInterval(keepAliveTimer);
+    if (USE_KEEP_ALIVE_TIMER) {
+      clearInterval(keepAliveTimer);
+    }
     return;
   }; //end generateTranscriptions
 
   await generateTranscriptions();
   console.log("all done");
-  return res.end();
+  if (USE_KEEP_ALIVE_TIMER) {
+    return res.end();
+  } else {
+    return res.status(200).json({ message: "All done" });
+  }
 });
 
 // All other GET requests not handled before will return our React app
