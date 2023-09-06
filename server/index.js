@@ -59,61 +59,11 @@ const llm = new OpenAI(); //the llm model to use (currently only openai)
 let chain; //will hold the llm and retriever
 let summarizer; //will hold the summarization chain
 let transcription; //will hold the transcription from openai
+const transcripts = []; //will hold the transcripts from openai if the audio is split into chunks
 let quizQuestions; //will hold the quiz questions if this mode is selected
 
 //llm
 import { OpenAI } from "langchain/llms/openai";
-
-const transcribeAudioChunks = async (outputPaths) => {
-  const transcripts = [];
-  for (let i = 0; i < outputPaths.length; i++) {
-    const outputPath = outputPaths[i];
-    const transcript = await transcribeAudio(outputPath, "audio");
-    transcripts.push(transcript);
-    console.log(`transcript ${i} generated`);
-  }
-  console.log("all transcripts generated");
-  return transcripts;
-};
-
-const transcribeAudio = async (filePath, mode) => {
-  let transcript;
-  if (LOAD_TRANSCRIPT_FROM_FILE) {
-    transcript = fs.readFileSync(
-      path.join(__dirname, "../", "transcript_w_timestamps.txt"),
-      "utf8"
-    );
-    // console.log(transcript, "transcription");
-    return transcript;
-    // return JSON.stringify(transcript);
-  } else {
-    // const transcriptionFormat = mode === "audio" ? "srt" : "text";
-    let transcriptionFormat;
-    if (FORCE_SRT) {
-      transcriptionFormat = "srt";
-    } else {
-      transcriptionFormat = mode === "audio" ? "srt" : "text";
-    }
-
-    // console.log("filePath", filePath, transcriptionFormat);
-    transcript = await openai
-      .createTranscription(
-        fs.createReadStream(filePath),
-        "whisper-1",
-        "", //prompt, unused
-        transcriptionFormat
-      )
-      .then((response) => {
-        // console.log(response.data);
-        return response.data;
-      })
-      .catch((err) => {
-        console.log("transcription error!", err);
-        return "maxlength";
-      });
-    return transcript;
-  }
-};
 
 const PORT = process.env.PORT || 3001;
 
@@ -422,6 +372,45 @@ async function splitAudioIntoChunks(filePath) {
   });
 } //end splitAudioIntoChunks
 
+async function transcribeAudioChunks(outputPaths, mode) {
+  return new Promise((resolve, reject) => {
+    async function transcribeAudioChunkSequentially() {
+      for (let i = 0; i < outputPaths.length; i++) {
+        const filePath = outputPaths[i];
+        const transcriptionFormat = "srt";
+        await new Promise(async (resolve, reject) => {
+          openai
+            .createTranscription(
+              fs.createReadStream(filePath),
+              "whisper-1",
+              "", //prompt, unused
+              transcriptionFormat
+            )
+            .then((response) => {
+              console.log(`whisper transcribed ${filePath}`);
+              transcripts.push(response.data);
+              resolve();
+            })
+            .catch((err) => {
+              console.log("transcription error!", err);
+              reject(err);
+            });
+        });
+      }
+    }
+
+    transcribeAudioChunkSequentially()
+      .then(() => {
+        console.log("All chunks exported successfully");
+        resolve(transcripts);
+      })
+      .catch((err) => {
+        console.error("Error exporting chunks:", err.message);
+        reject(err);
+      });
+  });
+}
+
 const establishLLM = async function (transcript, mode) {
   // console.log("establishing llm");
   const llm = new OpenAI();
@@ -564,6 +553,45 @@ app.get("/api/fetch", async (req, res) => {
   res.json({ transcription: transcription });
 });
 
+const transcribeAudio = async (filePath, mode) => {
+  let transcript;
+  if (LOAD_TRANSCRIPT_FROM_FILE) {
+    transcript = fs.readFileSync(
+      path.join(__dirname, "../", "transcript_w_timestamps.txt"),
+      "utf8"
+    );
+    // console.log(transcript, "transcription");
+    return transcript;
+    // return JSON.stringify(transcript);
+  } else {
+    // const transcriptionFormat = mode === "audio" ? "srt" : "text";
+    let transcriptionFormat;
+    if (FORCE_SRT) {
+      transcriptionFormat = "srt";
+    } else {
+      transcriptionFormat = mode === "audio" ? "srt" : "text";
+    }
+
+    // console.log("filePath", filePath, transcriptionFormat);
+    transcript = await openai
+      .createTranscription(
+        fs.createReadStream(filePath),
+        "whisper-1",
+        "", //prompt, unused
+        transcriptionFormat
+      )
+      .then((response) => {
+        // console.log(response.data);
+        return response.data;
+      })
+      .catch((err) => {
+        console.log("transcription error!", err);
+        return "maxlength";
+      });
+    return transcript;
+  }
+};
+
 app.post("/api/transcribeEpisode", async (req, res) => {
   const { episodeUrl, mode } = req.body;
   console.log(episodeUrl, "episodeURL");
@@ -581,7 +609,6 @@ app.post("/api/transcribeEpisode", async (req, res) => {
 
   //MH TODO: check file size
   const generateTranscriptions = async () => {
-    //
     let keepAliveTimer = setInterval(() => {
       console.log("keep alive");
       res.write("");
@@ -600,17 +627,11 @@ app.post("/api/transcribeEpisode", async (req, res) => {
         const outputPaths = await splitAudioIntoChunks(filePath);
 
         console.log("transcribing chunks");
-        const chunkedTranscripts = await transcribeAudioChunks(outputPaths);
 
-        // const transcriptionsPromises = outputPaths.map(async (outputPath) => {
-        //   //MH TODO: may need to account for order in which these get transcribed if it's getting messed up.
-        //   return transcribeAudio(outputPath, mode);
-        // });
-
-        // const chunkedTranscripts = await Promise.all(transcriptionsPromises);
-
-        console.log("all transcripts generated 2");
-
+        const chunkedTranscripts = await transcribeAudioChunks(
+          outputPaths,
+          mode
+        );
         transcription = chunkedTranscripts.join(""); // Combine all chunk transcripts
 
         //TODO: need to adjust transcript timestamps to account for chunking
@@ -630,7 +651,9 @@ app.post("/api/transcribeEpisode", async (req, res) => {
     } else {
       console.log("file size ok");
       try {
+        console.log("transcribing audio");
         transcription = await transcribeAudio(filePath, mode);
+        console.log("transcription");
       } catch (error) {
         console.log("error transcribing audio", error);
         return res.status(500).json({ error: error });
@@ -648,9 +671,9 @@ app.post("/api/transcribeEpisode", async (req, res) => {
 
     console.log("llm established, generating quiz questions");
 
-    // if (mode === "quiz") {
-    // res.write(JSON.stringify({ message: "Generating quiz questions" }));
-    let query = `You are a college teacher, asking college students questions about the stories mentioned in the podcast whose answers summarize the key topics. Be creative. Generate 5 quiz questions. Do not include mention of any line numbers or timestamps in your questions.`;
+    // let query = `You are a college teacher, asking college students questions about the stories mentioned in the podcast whose answers summarize the key topics. Be creative. Generate 5 quiz questions. Do not include mention of any line numbers or timestamps in your questions.`;
+
+    let query = `Generate 5 quiz questions about the story told in the podcast episode. Do not include mention of any line numbers or timestamps in your questions. Do not ask questions about anything that happens at the beginning or end.`;
 
     if (USE_ONLY_SUMMARY) {
       //MH - currently fails because output is not returned from establishLLM
@@ -692,7 +715,7 @@ app.post("/api/transcribeEpisode", async (req, res) => {
     }
     clearInterval(keepAliveTimer);
     return;
-  };
+  }; //end generateTranscriptions
 
   await generateTranscriptions();
   console.log("all done");
