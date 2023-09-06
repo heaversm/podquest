@@ -366,35 +366,38 @@ async function splitAudioIntoChunks(filePath) {
     const outputPaths = [];
     const chunkDurations = [];
 
-    for (let chunkIndex = 0; chunkIndex < numChunks; chunkIndex++) {
-      const startTime = chunkIndex * chunkDurationSeconds;
-      const endTime = Math.min(
-        (chunkIndex + 1) * chunkDurationSeconds,
-        inputDurationSeconds
-      );
-      const promise = new Promise((resolveChunk, rejectChunk) => {
-        let tempPath = filePath.replace(".mp3", "");
-        const outputPath = `${tempPath}_${chunkIndex}.mp3`;
-        outputPaths.push(outputPath);
-        ffmpeg(filePath)
-          .setStartTime(startTime)
-          .setDuration(endTime - startTime)
-          .output(outputPath)
-          .on("end", () => {
-            console.log(`Chunk ${chunkIndex} exported successfully`);
-            resolveChunk();
-          })
-          .on("error", (err) => {
-            console.error(`Error exporting chunk ${chunkIndex}:`, err.message);
-            rejectChunk(err);
-          })
-          .run();
-      });
-      promises.push(promise);
-    }
-    // console.log("all chunks processed");
-    // return outputPaths;
-    Promise.all(promises)
+    async function exportChunksSequentially() {
+      for (let chunkIndex = 0; chunkIndex < numChunks; chunkIndex++) {
+        const startTime = chunkIndex * chunkDurationSeconds;
+        const endTime = Math.min(
+          (chunkIndex + 1) * chunkDurationSeconds,
+          inputDurationSeconds
+        );
+
+        await new Promise((resolveChunk, rejectChunk) => {
+          let tempPath = filePath.replace(".mp3", "");
+          const outputPath = `${tempPath}_${chunkIndex}.mp3`;
+          outputPaths.push(outputPath);
+          ffmpeg(filePath)
+            .setStartTime(startTime)
+            .setDuration(endTime - startTime)
+            .output(outputPath)
+            .on("end", () => {
+              console.log(`Chunk ${chunkIndex} exported successfully`);
+              resolveChunk();
+            })
+            .on("error", (err) => {
+              console.error(
+                `Error exporting chunk ${chunkIndex}:`,
+                err.message
+              );
+              rejectChunk(err);
+            })
+            .run();
+        });
+      } //end for
+    } //end exportChunksSequentially
+    exportChunksSequentially()
       .then(() => {
         console.log("All chunks exported successfully");
         resolve(outputPaths);
@@ -404,7 +407,7 @@ async function splitAudioIntoChunks(filePath) {
         reject(err);
       });
   });
-}
+} //end splitAudioIntoChunks
 
 const establishLLM = async function (transcript, mode) {
   // console.log("establishing llm");
@@ -568,7 +571,7 @@ app.post("/api/transcribeEpisode", async (req, res) => {
     //
     let keepAliveTimer = setInterval(() => {
       console.log("keep alive");
-      res.write("transcribing");
+      res.write("");
     }, 20000);
 
     const stats = await statAsync(filePath);
@@ -583,6 +586,8 @@ app.post("/api/transcribeEpisode", async (req, res) => {
       try {
         const outputPaths = await splitAudioIntoChunks(filePath);
 
+        console.log("transcribing chunks");
+
         const transcriptionsPromises = outputPaths.map(async (outputPath) => {
           //MH TODO: may need to account for order in which these get transcribed if it's getting messed up.
           return transcribeAudio(outputPath, mode);
@@ -590,12 +595,14 @@ app.post("/api/transcribeEpisode", async (req, res) => {
 
         const chunkedTranscripts = await Promise.all(transcriptionsPromises);
 
+        console.log("all transcripts generated");
+
         transcription = chunkedTranscripts.join(""); // Combine all chunk transcripts
 
         //TODO: need to adjust transcript timestamps to account for chunking
         const adjustedTranscript = adjustTranscript(transcription);
         transcription = adjustedTranscript;
-        // console.log("transcription", transcription);
+        console.log("transcription", transcription);
 
         //remove chunked audio
         outputPaths.forEach((outputPath) => {
@@ -622,18 +629,14 @@ app.post("/api/transcribeEpisode", async (req, res) => {
       }
     }
 
-    // res.write(
-    //   JSON.stringify({
-    //     message: "Transcription Created - Creating Embeddings",
-    //   })
-    // );
-
     console.log("establishing llm");
     const output = await establishLLM(transcription, mode);
 
+    console.log("llm established, generating quiz questions");
+
     // if (mode === "quiz") {
     // res.write(JSON.stringify({ message: "Generating quiz questions" }));
-    let query = `You are a college teacher, asking college students questions about the stories mentioned in the podcast whose answers summarize the key topics. Be creative. Generate 5 quiz questions.`;
+    let query = `You are a college teacher, asking college students questions about the stories mentioned in the podcast whose answers summarize the key topics. Be creative. Generate 5 quiz questions. Do not include mention of any line numbers or timestamps in your questions.`;
 
     if (USE_ONLY_SUMMARY) {
       //MH - currently fails because output is not returned from establishLLM
@@ -649,7 +652,7 @@ app.post("/api/transcribeEpisode", async (req, res) => {
     const quizQuestionsResponse = await chain.call({
       query: query,
     });
-    console.log("all quiz questions", quizQuestionsResponse.text);
+    console.log("all quiz questions generated", quizQuestionsResponse.text);
 
     if (quizQuestionsResponse?.text) {
       const inputText = quizQuestionsResponse.text;
@@ -678,7 +681,7 @@ app.post("/api/transcribeEpisode", async (req, res) => {
   };
 
   await generateTranscriptions();
-  console.log("llm ready");
+  console.log("all done");
   return res.end();
 });
 
