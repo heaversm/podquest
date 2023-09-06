@@ -201,7 +201,7 @@ const getAudioFromURL = async (url) => {
   });
 };
 
-app.get("/api/getQuizQuestions", async (req, res) => {
+app.get("/getQuizQuestions", async (req, res) => {
   if (quizQuestions && quizQuestions.length > 0) {
     return res.status(200).json({ quizQuestions: quizQuestions });
   } else {
