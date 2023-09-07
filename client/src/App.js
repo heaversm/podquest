@@ -99,7 +99,6 @@ function App() {
   };
 
   const handlePollForStatus = () => {
-    console.log("polling for status");
     fetch("/api/getStatus", {
       method: "GET",
     })
@@ -107,10 +106,10 @@ function App() {
         return res.json();
       })
       .then((data) => {
-        // console.log("status data", data);
+        console.log("status data", data.status);
         if (data.status === "ready") {
           console.log("llm ready");
-          handleFetchQuizQuestions();
+
           setLLMReady(true);
           setStatusMessage({
             message: "LLM Ready!",
@@ -181,6 +180,12 @@ function App() {
   }, [statusMessage]);
 
   useEffect(() => {
+    if (mode === "quiz" && quizQuestions.length === 0) {
+      handleFetchQuizQuestions();
+    }
+  }, [mode]);
+
+  useEffect(() => {
     if (podcasts && podcasts.length > 0) {
       handleSetStatusMessage({
         message: "Podcasts found",
@@ -232,8 +237,8 @@ function App() {
     if (timeStamp !== null && audioRef.current) {
       audioRef.current.currentTime = timeStamp;
       setStatusMessage({
-        message: `Moving audio to ${timeStamp} seconds`,
-        type: "success",
+        message: `Skipping to ${timeStamp} seconds`,
+        type: "info",
       });
       audioRef.current.play();
     }

@@ -47,7 +47,9 @@ const FORCE_SRT = true; //allows us to avoid refreshing the page and re-transcri
 const USE_KEEP_ALIVE_TIMER = false;
 
 const MAX_FILE_SIZE = 20; //in MB. If a podcast is over this size, split it up
-const MAX_DURATION = 600; //in seconds, if splitting by duration instead of size (not currently used?)
+const MAX_DURATION = 300; //in seconds, if splitting by duration instead of size
+const MAX_CHUNKS = 10; //if episode exceeds this, it's probably too slow given the current transcription process
+
 //END CONFIGURATION
 
 const configuration = new Configuration({
@@ -60,7 +62,7 @@ const llm = new OpenAI(); //the llm model to use (currently only openai)
 let chain; //will hold the llm and retriever
 let summarizer; //will hold the summarization chain
 let transcription; //will hold the transcription from openai
-const transcripts = []; //will hold the transcripts from openai if the audio is split into chunks
+let transcripts = []; //will hold the transcripts from openai if the audio is split into chunks
 let quizQuestions; //will hold the quiz questions if this mode is selected
 let llmStatus = "not ready"; //will hold the status of the llm
 
@@ -325,9 +327,13 @@ async function splitAudioIntoChunks(filePath) {
     console.log("splitting into chunks");
     const buffer = fs.readFileSync(filePath);
     const duration = getMP3Duration(buffer);
+
     const inputDurationSeconds = duration / 1000;
     const chunkDurationSeconds = MAX_DURATION;
-    const numChunks = Math.ceil(inputDurationSeconds / chunkDurationSeconds);
+    const numChunks = Math.min(
+      Math.ceil(inputDurationSeconds / chunkDurationSeconds),
+      MAX_CHUNKS
+    );
     const promises = [];
     const outputPaths = [];
     const chunkDurations = [];
@@ -349,6 +355,7 @@ async function splitAudioIntoChunks(filePath) {
             .setDuration(endTime - startTime)
             .output(outputPath)
             .on("end", () => {
+              llmStatus = `exported chunk ${chunkIndex} of ${numChunks}`;
               console.log(`Chunk ${chunkIndex} exported successfully`);
               resolveChunk();
             })
@@ -376,6 +383,7 @@ async function splitAudioIntoChunks(filePath) {
 } //end splitAudioIntoChunks
 
 async function transcribeAudioChunks(outputPaths, mode) {
+  transcripts = [];
   return new Promise((resolve, reject) => {
     async function transcribeAudioChunkSequentially() {
       for (let i = 0; i < outputPaths.length; i++) {
