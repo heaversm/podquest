@@ -204,6 +204,7 @@ const getAudioFromURL = async (url) => {
 
 app.get("/getQuizQuestions", async (req, res) => {
   if (quizQuestions && quizQuestions.length > 0) {
+    console.log("quizQuestions", quizQuestions);
     return res.status(200).json({ quizQuestions: quizQuestions });
   } else {
     return res.status(404).json({ error: "No quiz questions found" });
@@ -631,23 +632,41 @@ app.post("/api/transcribeEpisode", async (req, res) => {
 
         console.log("transcribing chunks");
 
-        const chunkedTranscripts = await transcribeAudioChunks(
-          outputPaths,
-          mode
+        // const chunkedTranscripts = await transcribeAudioChunks(
+        //   outputPaths,
+        //   mode
+        // );
+        // transcription = chunkedTranscripts.join(""); // Combine all chunk transcripts
+
+        // //TODO: need to adjust transcript timestamps to account for chunking
+        // const adjustedTranscript = adjustTranscript(transcription);
+        // transcription = adjustedTranscript;
+        // console.log("final transcription", transcription);
+
+        // //remove chunked audio
+        // outputPaths.forEach((outputPath) => {
+        //   removeFile(outputPath);
+        // });
+        // //remove original audio
+        // removeFile(filePath);
+
+        await transcribeAudioChunks(outputPaths, mode).then(
+          (chunkedTranscripts) => {
+            transcription = chunkedTranscripts.join(""); // Combine all chunk transcripts
+
+            //TODO: need to adjust transcript timestamps to account for chunking
+            const adjustedTranscript = adjustTranscript(transcription);
+            transcription = adjustedTranscript;
+            console.log("final transcription", transcription);
+
+            //remove chunked audio
+            outputPaths.forEach((outputPath) => {
+              removeFile(outputPath);
+            });
+            //remove original audio
+            removeFile(filePath);
+          }
         );
-        transcription = chunkedTranscripts.join(""); // Combine all chunk transcripts
-
-        //TODO: need to adjust transcript timestamps to account for chunking
-        const adjustedTranscript = adjustTranscript(transcription);
-        transcription = adjustedTranscript;
-        console.log("final transcription", transcription);
-
-        //remove chunked audio
-        outputPaths.forEach((outputPath) => {
-          removeFile(outputPath);
-        });
-        //remove original audio
-        removeFile(filePath);
       } catch (error) {
         console.log("error splitting audio", error);
       }

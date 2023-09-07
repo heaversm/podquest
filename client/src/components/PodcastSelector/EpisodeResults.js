@@ -32,6 +32,7 @@ export function EpisodeResults({
       method: "GET",
     })
       .then((res) => {
+        console.log("quiz response", res);
         return res.json();
       })
       .then((data) => {
