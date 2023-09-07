@@ -62,6 +62,7 @@ let summarizer; //will hold the summarization chain
 let transcription; //will hold the transcription from openai
 const transcripts = []; //will hold the transcripts from openai if the audio is split into chunks
 let quizQuestions; //will hold the quiz questions if this mode is selected
+let llmStatus = "not ready"; //will hold the status of the llm
 
 //llm
 import { OpenAI } from "langchain/llms/openai";
@@ -202,7 +203,7 @@ const getAudioFromURL = async (url) => {
   });
 };
 
-app.get("/getQuizQuestions", async (req, res) => {
+app.get("/api/getQuizQuestions", async (req, res) => {
   if (quizQuestions && quizQuestions.length > 0) {
     console.log("quizQuestions", quizQuestions);
     return res.status(200).json({ quizQuestions: quizQuestions });
@@ -390,6 +391,10 @@ async function transcribeAudioChunks(outputPaths, mode) {
             )
             .then((response) => {
               console.log(`whisper transcribed ${filePath}`);
+
+              llmStatus = `transcribed audio file ${i + 1} of ${
+                outputPaths.length
+              }`;
               transcripts.push(response.data);
               resolve();
             })
@@ -550,9 +555,12 @@ app.get("/api/downloadTranscript", async (req, res) => {
   res.json({ transcription: transcription });
 });
 
-app.get("/api/fetch", async (req, res) => {
-  // console.log("return transcript", transcription);
-  res.json({ transcription: transcription });
+app.get("/api/getStatus", async (req, res) => {
+  if (llmStatus === "ready") {
+    return res.status(200).json({ status: llmStatus });
+  } else {
+    return res.status(202).json({ status: llmStatus });
+  }
 });
 
 const transcribeAudio = async (filePath, mode) => {
@@ -594,10 +602,10 @@ const transcribeAudio = async (filePath, mode) => {
   }
 };
 
-app.post("/api/transcribeEpisode", async (req, res) => {
-  const { episodeUrl, mode } = req.body;
-  console.log(episodeUrl, "episodeURL");
+async function transcribeEpisode(episodeUrl, mode) {
+  let keepAliveTimer;
   let filePath;
+  llmStatus = "downloading audio";
   if (LOAD_AUDIO_FROM_FILE) {
     filePath = path.join(__dirname, "../audio.mp3");
   } else {
@@ -605,60 +613,37 @@ app.post("/api/transcribeEpisode", async (req, res) => {
       filePath = await getAudioFromURL(episodeUrl);
     } catch (error) {
       console.log("error getting audio file", error);
-      return res.status(500).json({ error: error });
+      // return res.status(500).json({ error: error });
     }
   }
 
   //MH TODO: check file size
   const generateTranscriptions = async () => {
-    if (USE_KEEP_ALIVE_TIMER) {
-      let keepAliveTimer = setInterval(() => {
-        console.log("keep alive");
-        res.write("");
-      }, 20000);
-    }
-
+    llmStatus = "getting file size";
     const stats = await statAsync(filePath);
 
     const fileSizeInMB = stats.size / 1024 / 1024;
     console.log("fs in MB", fileSizeInMB, "max", MAX_FILE_SIZE);
 
-    // res.write(JSON.stringify({ message: "Audio Received - Transcribing..." }));
-
     if (fileSizeInMB > MAX_FILE_SIZE) {
       console.log("file size too large, splitting audio");
+      llmStatus = "splitting audio";
       try {
         const outputPaths = await splitAudioIntoChunks(filePath);
 
+        llmStatus = "transcribing chunks";
         console.log("transcribing chunks");
-
-        // const chunkedTranscripts = await transcribeAudioChunks(
-        //   outputPaths,
-        //   mode
-        // );
-        // transcription = chunkedTranscripts.join(""); // Combine all chunk transcripts
-
-        // //TODO: need to adjust transcript timestamps to account for chunking
-        // const adjustedTranscript = adjustTranscript(transcription);
-        // transcription = adjustedTranscript;
-        // console.log("final transcription", transcription);
-
-        // //remove chunked audio
-        // outputPaths.forEach((outputPath) => {
-        //   removeFile(outputPath);
-        // });
-        // //remove original audio
-        // removeFile(filePath);
 
         await transcribeAudioChunks(outputPaths, mode).then(
           (chunkedTranscripts) => {
             transcription = chunkedTranscripts.join(""); // Combine all chunk transcripts
 
             //TODO: need to adjust transcript timestamps to account for chunking
+            llmStatus = "reassembling audio";
             const adjustedTranscript = adjustTranscript(transcription);
             transcription = adjustedTranscript;
             console.log("final transcription", transcription);
-
+            llmStatus = "audio transcribed";
             //remove chunked audio
             outputPaths.forEach((outputPath) => {
               removeFile(outputPath);
@@ -674,28 +659,30 @@ app.post("/api/transcribeEpisode", async (req, res) => {
       console.log("file size ok");
       try {
         console.log("transcribing audio");
+        llmStatus = "transcribing audio";
         transcription = await transcribeAudio(filePath, mode);
         console.log("transcription");
       } catch (error) {
         console.log("error transcribing audio", error);
-        return res.status(500).json({ error: error });
+        return error;
       }
 
       const removeResult = removeFile(filePath);
       if (removeResult.status === "error") {
         console.error(removeResult.error);
-        return res.status(500).json({ error: removeResult.error });
+        return removeResult.error;
       }
     }
 
     console.log("establishing llm");
+    llmStatus = "establishing llm";
     const output = await establishLLM(transcription, mode);
-
+    llmStatus = "generating quiz";
     console.log("llm established, generating quiz questions");
 
     // let query = `You are a college teacher, asking college students questions about the stories mentioned in the podcast whose answers summarize the key topics. Be creative. Generate 5 quiz questions. Do not include mention of any line numbers or timestamps in your questions.`;
 
-    let query = `Generate 5 quiz questions about the story told in the podcast episode. Do not include mention of any line numbers or timestamps in your questions. Do not ask questions about anything that happens at the beginning or end.`;
+    let query = `Generate 5 quiz questions about the topics discussed in the episode. Do not include mention of any line numbers or timestamps in your questions.`;
 
     if (USE_ONLY_SUMMARY) {
       //MH - currently fails because output is not returned from establishLLM
@@ -731,7 +718,7 @@ app.post("/api/transcribeEpisode", async (req, res) => {
           } else {
             quizQuestions = questions;
           }
-          console.log("final quiz questions", quizQuestions);
+          // console.log("final quiz questions", quizQuestions);
         }
       }
     }
@@ -743,11 +730,15 @@ app.post("/api/transcribeEpisode", async (req, res) => {
 
   await generateTranscriptions();
   console.log("all done");
-  if (USE_KEEP_ALIVE_TIMER) {
-    return res.end();
-  } else {
-    return res.status(200).json({ message: "All done" });
-  }
+  llmStatus = "ready";
+  return "ready";
+}
+
+app.post("/api/transcribeEpisode", async (req, res) => {
+  const { episodeUrl, mode } = req.body;
+  transcribeEpisode(episodeUrl, mode);
+  llmStatus = "initializing";
+  res.status(202).json({ message: "Transcription in progress" });
 });
 
 // All other GET requests not handled before will return our React app

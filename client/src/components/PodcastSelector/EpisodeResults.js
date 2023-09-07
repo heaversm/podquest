@@ -17,6 +17,7 @@ export function EpisodeResults({
   handleSetStatusMessage,
   handleSetFilePath,
   handleSetQuizQuestions,
+  handlePollForStatus,
   mode,
 }) {
   const [episode, setEpisode] = React.useState("");
@@ -26,23 +27,6 @@ export function EpisodeResults({
       handleSetFilePath(episode);
     }
   }, [episode]);
-
-  const handleFetchQuizQuestions = (e) => {
-    fetch("/api/getQuizQuestions", {
-      method: "GET",
-    })
-      .then((res) => {
-        console.log("quiz response", res);
-        return res.json();
-      })
-      .then((data) => {
-        // console.log("quizQuestions", data.quizQuestions);
-        handleSetQuizQuestions(data.quizQuestions);
-      })
-      .catch((err) => {
-        console.log("err", err);
-      });
-  };
 
   const handleEpisodeChange = (e) => {
     e.preventDefault();
@@ -62,21 +46,16 @@ export function EpisodeResults({
       },
       body: JSON.stringify({ episodeUrl, mode }),
     })
-      .then(() => {
-        console.log("llm ready");
-        handleFetchQuizQuestions();
-        handleSetLLMReady(true);
-        handleSetStatusMessage({
-          message: "LLM Ready!",
-          type: "info",
-        });
+      .then((res) => {
+        return res.json();
+      })
+      .then((data) => {
+        console.log("transcribeData", data.message);
+        // handleSetQuizQuestions(data.quizQuestions);
+        handlePollForStatus();
       })
       .catch((err) => {
         console.log("err", err);
-        handleSetStatusMessage({
-          message: "Unexpected error!",
-          type: "info",
-        });
       });
   };
 

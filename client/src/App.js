@@ -81,6 +81,54 @@ function App() {
     setEpisodes(episodesList);
   };
 
+  const handleFetchQuizQuestions = (e) => {
+    //todo move to app
+    fetch("/api/getQuizQuestions", {
+      method: "GET",
+    })
+      .then((res) => {
+        return res.json();
+      })
+      .then((data) => {
+        console.log("quizQuestions", data);
+        handleSetQuizQuestions(data.quizQuestions);
+      })
+      .catch((err) => {
+        console.log("err", err);
+      });
+  };
+
+  const handlePollForStatus = () => {
+    console.log("polling for status");
+    fetch("/api/getStatus", {
+      method: "GET",
+    })
+      .then((res) => {
+        return res.json();
+      })
+      .then((data) => {
+        // console.log("status data", data);
+        if (data.status === "ready") {
+          console.log("llm ready");
+          handleFetchQuizQuestions();
+          setLLMReady(true);
+          setStatusMessage({
+            message: "LLM Ready!",
+            type: "info",
+          });
+        } else {
+          handleSetStatusMessage({
+            message: data.status,
+            type: "info",
+          });
+          setTimeout(handlePollForStatus, 5000);
+        }
+      })
+      .catch((err) => {
+        console.log("err", err);
+      });
+  };
+
   const handleSetQueryResults = (queryResultsList) => {
     setQueryResults(queryResultsList);
     if (mode === "quiz") {
@@ -140,15 +188,6 @@ function App() {
       });
     }
   }, [podcasts]);
-
-  useEffect(() => {
-    if (episodes && episodes.length > 0) {
-      handleSetStatusMessage({
-        message: "Episodes found",
-        type: "info",
-      });
-    }
-  }, [episodes]);
 
   useEffect(() => {
     //this is called when quizQuestions first set.
@@ -298,6 +337,7 @@ function App() {
                         handleSetStatusMessage={handleSetStatusMessage}
                         handleSetFilePath={handleSetFilePath}
                         handleSetQuizQuestions={handleSetQuizQuestions}
+                        handlePollForStatus={handlePollForStatus}
                       />
                     )}
                   </>

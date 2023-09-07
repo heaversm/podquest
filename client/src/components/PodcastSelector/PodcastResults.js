@@ -43,6 +43,10 @@ export function PodcastResults({
       .then((data) => {
         const { mp3s } = data;
         handleSetEpisodes(mp3s);
+        handleSetStatusMessage({
+          message: "Episodes found",
+          type: "info",
+        });
       })
       .catch((err) => {
         console.log("err", err);
