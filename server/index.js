@@ -13,6 +13,7 @@ import crypto from "crypto";
 import axios from "axios";
 import { v4 as uuidv4 } from "uuid";
 import { Configuration, OpenAIApi } from "openai";
+import * as nodeOpenAI from "openai";
 import {
   CharacterTextSplitter,
   RecursiveCharacterTextSplitter,
@@ -21,6 +22,7 @@ import { Document } from "langchain/document";
 import { FaissStore } from "langchain/vectorstores/faiss";
 import { OpenAIEmbeddings } from "langchain/embeddings/openai";
 import { RetrievalQAChain, loadSummarizationChain } from "langchain/chains";
+import { ChatPromptTemplate } from "langchain/prompts";
 
 import { mkdir, writeFile } from "fs/promises";
 import { Readable } from "stream";
@@ -50,6 +52,8 @@ const MAX_FILE_SIZE = 20; //in MB. If a podcast is over this size, split it up
 const MAX_DURATION = 300; //in seconds, if splitting by duration instead of size
 const MAX_CHUNKS = 10; //if episode exceeds this, it's probably too slow given the current transcription process
 
+const DO_RRF = true; //use Reciprocal Ranked Fusion
+
 //END CONFIGURATION
 
 const configuration = new Configuration({
@@ -59,6 +63,7 @@ const configuration = new Configuration({
 const openai = new OpenAIApi(configuration);
 
 const llm = new OpenAI(); //the llm model to use (currently only openai)
+let finalOutput; //will hold the output docs (shuffled or unshuffled)
 let chain; //will hold the llm and retriever
 let summarizer; //will hold the summarization chain
 let transcription; //will hold the transcription from openai
@@ -308,12 +313,91 @@ app.post("/api/performUserQuery", async (req, res) => {
     });
     return res.status(200).json({ text: chainResponse.text });
   } else {
+    const generated_queries = await generateQueries(query);
+    // console.log("generated_queries", generated_queries);
+    const all_results = {};
+
+    generated_queries.forEach(async (generatedQuery) => {
+      const generatedQueryResults = vectorSearch(generatedQuery);
+      all_results[generatedQuery] = generatedQueryResults;
+    });
+
+    const rankedResults = reciprocalRankFusion(all_results);
+    console.log("rrf", rankedResults);
     chainResponse = await chain.call({
       query: query,
     });
     return res.status(200).json({ text: chainResponse.text });
   }
 });
+
+function reciprocalRankFusion(searchResultsDict, k = 60) {
+  const fusedScores = {};
+  console.log("Initial individual search result ranks:");
+
+  for (const query in searchResultsDict) {
+    if (searchResultsDict.hasOwnProperty(query)) {
+      const docScores = searchResultsDict[query];
+      console.log(`For query '${query}':`, docScores);
+    }
+  }
+
+  for (const query in searchResultsDict) {
+    if (searchResultsDict.hasOwnProperty(query)) {
+      const docScores = searchResultsDict[query];
+      for (let rank = 0; rank < Object.keys(docScores).length; rank++) {
+        const sortedDocs = Object.entries(docScores).sort(
+          (a, b) => b[1] - a[1]
+        );
+        const [doc, score] = sortedDocs[rank];
+        if (!(doc in fusedScores)) {
+          fusedScores[doc] = 0;
+        }
+        const previousScore = fusedScores[doc];
+        fusedScores[doc] += 1 / (rank + k);
+        console.log(
+          `Updating score for ${doc} from ${previousScore} to ${fusedScores[doc]} based on rank ${rank} in query '${query}'`
+        );
+      }
+    }
+  }
+
+  const sortedFusedScores = Object.fromEntries(
+    Object.entries(fusedScores).sort((a, b) => b[1] - a[1])
+  );
+  console.log("Final reranked results:", sortedFusedScores);
+  return sortedFusedScores;
+}
+
+function getRandomInt(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+async function vectorSearch(query) {
+  const numSelected = getRandomInt(2, 5);
+  const selectedDocs = finalOutput.slice(0, numSelected);
+  const scores = {};
+  selectedDocs.forEach((doc) => {
+    const randomScore = (Math.random() * (0.9 - 0.7) + 0.7).toFixed(2);
+    scores[doc] = parseFloat(randomScore);
+  });
+
+  const sortedScores = Object.fromEntries(
+    Object.entries(scores).sort((a, b) => b[1] - a[1])
+  );
+
+  return sortedScores;
+}
+
+async function generateQueries(originalQuery) {
+  const query = `You are a helpful assistant that generates multiple search queries based on a single input query. Generate multiple search queries related to: ${originalQuery}. OUTPUT (4 queries) and do not include the number in the query itself:`;
+  const response = await chain.call({
+    query: query,
+  });
+
+  const generatedQueries = response.text.trim().split("\n");
+  return generatedQueries;
+}
 
 function removeQueryParams(origURL) {
   const url = new URL(origURL);
@@ -437,9 +521,18 @@ const establishLLM = async function (transcript, mode) {
   const output = await splitter.splitDocuments([
     new Document({ pageContent: transcript }),
   ]);
-  // console.log("output", output);
+
+  if (DO_RRF) {
+    finalOutput = output
+      .map((value) => ({ value, sort: Math.random() }))
+      .sort((a, b) => a.sort - b.sort)
+      .map(({ value }) => value);
+  } else {
+    finalOutput = output;
+  }
+
   const vectorStore = await FaissStore.fromDocuments(
-    output,
+    finalOutput,
     new OpenAIEmbeddings()
   );
 
