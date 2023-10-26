@@ -328,7 +328,10 @@ app.post("/api/performUserQuery", async (req, res) => {
     Promise.all(promises).then(async () => {
       console.log("all results", altQueryDocs);
       const rankedResults = reciprocalRankFusion(altQueryDocs);
+      //TODO:MH - these are not sorting properly - given object
       console.log("Final reranked results", rankedResults);
+      const sortedObject = sortObjectByValues(unsortedObject);
+      console.log("sorted final reranked results", sortedObject);
       chainResponse = await chain.call({
         query: query,
       });
@@ -336,6 +339,17 @@ app.post("/api/performUserQuery", async (req, res) => {
     });
   }
 });
+
+function sortObjectByValues(obj) {
+  const sortedKeys = Object.keys(obj).sort((a, b) => obj[b] - obj[a]);
+  const sortedObject = {};
+
+  for (const key of sortedKeys) {
+    sortedObject[key] = obj[key];
+  }
+
+  return sortedObject;
+}
 
 function reciprocalRankFusion(altQueryDocs, k = 60) {
   const fusedScores = {};
@@ -351,20 +365,23 @@ function reciprocalRankFusion(altQueryDocs, k = 60) {
   for (const query in altQueryDocs) {
     console.log(query);
     if (altQueryDocs.hasOwnProperty(query)) {
-      const docScores = altQueryDocs[query];
-      console.log(`doc scores for query ${query} `, docScores);
-      for (let rank = 0; rank < Object.keys(docScores).length; rank++) {
-        const sortedDocs = Object.entries(docScores).sort(
-          (a, b) => b[1] - a[1]
-        );
-        const [doc, score] = sortedDocs[rank];
-        if (!(doc in fusedScores)) {
-          fusedScores[doc] = 0;
+      const docObj = altQueryDocs[query];
+      console.log(`doc scores for query ${query} `, docObj);
+      for (let rank = 0; rank < Object.keys(docObj).length; rank++) {
+        const sortedDocs = Object.entries(docObj).sort((a, b) => b[1] - a[1]);
+        console.log("sorted docs[rank]=", sortedDocs[rank]);
+        const [score, doc] = sortedDocs[rank];
+        console.log("score", score);
+        console.log("doc", doc);
+        const docID = doc.id;
+        const fusedDoc = fusedScores[docID];
+        if (!fusedDoc) {
+          fusedScores[docID] = 0;
         }
-        const previousScore = fusedScores[doc];
-        fusedScores[doc] += 1 / (rank + k);
+        const previousScore = fusedScores[docID];
+        fusedScores[docID] += 1 / (rank + k);
         console.log(
-          `Updating score for ${docScores.id} from ${previousScore} to ${fusedScores[doc]} based on rank ${rank} in query '${query}'`
+          `Updating score for ${docObj.id} from ${previousScore} to ${fusedScores[doc]} based on rank ${rank} in query '${query}'`
         );
       }
     }
@@ -373,6 +390,7 @@ function reciprocalRankFusion(altQueryDocs, k = 60) {
   const sortedFusedScores = Object.fromEntries(
     Object.entries(fusedScores).sort((a, b) => b[1] - a[1])
   );
+
   return sortedFusedScores;
 }
 
@@ -544,10 +562,18 @@ const establishLLM = async function (transcript, mode) {
   ]);
 
   if (DO_RRF) {
+    //random shuffle
     finalDocs = output
       .map((value) => ({ value, sort: Math.random() }))
       .sort((a, b) => a.sort - b.sort)
       .map(({ value }) => value);
+
+    finalDocs.forEach((documentObject, index) => {
+      const pageContentLines = documentObject.pageContent.split("\n");
+      const lineNumber = pageContentLines[0];
+      documentObject.id = pageContentLines[0];
+      documentObject.score = index;
+    });
   } else {
     finalDocs = output;
   }
