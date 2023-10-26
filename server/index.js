@@ -65,6 +65,7 @@ const openai = new OpenAIApi(configuration);
 const llm = new OpenAI(); //the llm model to use (currently only openai)
 let finalOutput; //will hold the output docs (shuffled or unshuffled)
 let chain; //will hold the llm and retriever
+let vectorStore; //will hold the vector store of docs
 let summarizer; //will hold the summarization chain
 let transcription; //will hold the transcription from openai
 let transcripts = []; //will hold the transcripts from openai if the audio is split into chunks
@@ -314,20 +315,34 @@ app.post("/api/performUserQuery", async (req, res) => {
     return res.status(200).json({ text: chainResponse.text });
   } else {
     const generated_queries = await generateQueries(query);
-    // console.log("generated_queries", generated_queries);
+    console.log(
+      "generated_queries",
+      generated_queries,
+      generated_queries.length
+    );
     const all_results = {};
 
-    generated_queries.forEach(async (generatedQuery) => {
-      const generatedQueryResults = vectorSearch(generatedQuery);
-      all_results[generatedQuery] = generatedQueryResults;
+    const promises = generated_queries.map(async (generatedQuery) => {
+      //MH TODO: may need to just do a chain.call query search on the above.
+      // const generatedQueryResults = await chain.call({
+      //   query: generatedQuery,
+      // });
+
+      const generatedQueryResults = await vectorSearch(generatedQuery);
+      console.log("generatedQueryResults", generatedQueryResults);
+      all_results[`${generatedQuery}`] = generatedQueryResults;
     });
 
-    const rankedResults = reciprocalRankFusion(all_results);
-    console.log("rrf", rankedResults);
-    chainResponse = await chain.call({
-      query: query,
+    // console.log("all results", all_results);
+    Promise.all(promises).then(async () => {
+      console.log("all results", all_results);
+      const rankedResults = reciprocalRankFusion(all_results);
+      console.log("Final reranked results", rankedResults);
+      chainResponse = await chain.call({
+        query: query,
+      });
+      return res.status(200).json({ text: chainResponse.text });
     });
-    return res.status(200).json({ text: chainResponse.text });
   }
 });
 
@@ -343,6 +358,7 @@ function reciprocalRankFusion(searchResultsDict, k = 60) {
   }
 
   for (const query in searchResultsDict) {
+    console.log(query);
     if (searchResultsDict.hasOwnProperty(query)) {
       const docScores = searchResultsDict[query];
       for (let rank = 0; rank < Object.keys(docScores).length; rank++) {
@@ -365,7 +381,6 @@ function reciprocalRankFusion(searchResultsDict, k = 60) {
   const sortedFusedScores = Object.fromEntries(
     Object.entries(fusedScores).sort((a, b) => b[1] - a[1])
   );
-  console.log("Final reranked results:", sortedFusedScores);
   return sortedFusedScores;
 }
 
@@ -374,28 +389,40 @@ function getRandomInt(min, max) {
 }
 
 async function vectorSearch(query) {
-  const numSelected = getRandomInt(2, 5);
-  const selectedDocs = finalOutput.slice(0, numSelected);
-  const scores = {};
-  selectedDocs.forEach((doc) => {
-    const randomScore = (Math.random() * (0.9 - 0.7) + 0.7).toFixed(2);
-    scores[doc] = parseFloat(randomScore);
+  const docs = await vectorStore.similaritySearch(query);
+  docs.forEach((documentObject) => {
+    const pageContentLines = documentObject.pageContent.split("\n");
+    const lineNumber = pageContentLines[0];
+    documentObject.id = pageContentLines[0];
   });
+  return docs;
 
-  const sortedScores = Object.fromEntries(
-    Object.entries(scores).sort((a, b) => b[1] - a[1])
-  );
+  // console.log("selected docs", selectedDocs);
+  // const scores = {};
+  // selectedDocs.forEach((doc) => {
+  //   const randomScore = (Math.random() * (0.9 - 0.7) + 0.7).toFixed(2);
+  //   scores[doc] = parseFloat(randomScore);
+  // });
 
-  return sortedScores;
+  // const sortedScores = Object.fromEntries(
+  //   Object.entries(scores).sort((a, b) => b[1] - a[1])
+  // );
+
+  // console.log("scores", sortedScores);
+
+  // return sortedScores;
 }
 
 async function generateQueries(originalQuery) {
-  const query = `You are a helpful assistant that generates multiple search queries based on a single input query. Generate multiple search queries related to: ${originalQuery}. OUTPUT (4 queries) and do not include the number in the query itself:`;
+  const query = `You are a helpful assistant that generates multiple search queries based on a single input query. Generate multiple search queries related to: ${originalQuery}. OUTPUT A COMMA SEPARATED LIST (CSV) of the 4 resulting search queries. The queries themselves should not be listed by number. Do not include the original query in the array`;
   const response = await chain.call({
     query: query,
   });
 
-  const generatedQueries = response.text.trim().split("\n");
+  console.log(response.text);
+  // const lines = response.text.split("\n");
+  // const generatedQueries = lines.map((line) => line.trim());
+  const generatedQueries = response.text.trim().split(", ");
   return generatedQueries;
 }
 
@@ -531,7 +558,7 @@ const establishLLM = async function (transcript, mode) {
     finalOutput = output;
   }
 
-  const vectorStore = await FaissStore.fromDocuments(
+  vectorStore = await FaissStore.fromDocuments(
     finalOutput,
     new OpenAIEmbeddings()
   );
