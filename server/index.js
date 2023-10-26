@@ -10,7 +10,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 import crypto from "crypto";
-import axios from "axios";
+import axios, { all } from "axios";
 import { v4 as uuidv4 } from "uuid";
 import { Configuration, OpenAIApi } from "openai";
 import * as nodeOpenAI from "openai";
@@ -63,7 +63,7 @@ const configuration = new Configuration({
 const openai = new OpenAIApi(configuration);
 
 const llm = new OpenAI(); //the llm model to use (currently only openai)
-let finalOutput; //will hold the output docs (shuffled or unshuffled)
+let finalDocs; //will hold the output docs (shuffled or unshuffled)
 let chain; //will hold the llm and retriever
 let vectorStore; //will hold the vector store of docs
 let summarizer; //will hold the summarization chain
@@ -314,29 +314,20 @@ app.post("/api/performUserQuery", async (req, res) => {
     });
     return res.status(200).json({ text: chainResponse.text });
   } else {
-    const generated_queries = await generateQueries(query);
-    console.log(
-      "generated_queries",
-      generated_queries,
-      generated_queries.length
-    );
-    const all_results = {};
+    const generatedQueries = await generateQueries(query);
+    console.log("generatedQueries", generatedQueries);
+    const altQueryDocs = {};
 
-    const promises = generated_queries.map(async (generatedQuery) => {
-      //MH TODO: may need to just do a chain.call query search on the above.
-      // const generatedQueryResults = await chain.call({
-      //   query: generatedQuery,
-      // });
-
-      const generatedQueryResults = await vectorSearch(generatedQuery);
-      console.log("generatedQueryResults", generatedQueryResults);
-      all_results[`${generatedQuery}`] = generatedQueryResults;
+    const promises = generatedQueries.map(async (generatedQuery) => {
+      const docsFromAltQuery = await vectorSearch(generatedQuery);
+      console.log("docsFromAltQuery", docsFromAltQuery);
+      altQueryDocs[`${generatedQuery}`] = docsFromAltQuery;
     });
 
-    // console.log("all results", all_results);
+    // console.log("all results", altQueryDocs);
     Promise.all(promises).then(async () => {
-      console.log("all results", all_results);
-      const rankedResults = reciprocalRankFusion(all_results);
+      console.log("all results", altQueryDocs);
+      const rankedResults = reciprocalRankFusion(altQueryDocs);
       console.log("Final reranked results", rankedResults);
       chainResponse = await chain.call({
         query: query,
@@ -346,21 +337,22 @@ app.post("/api/performUserQuery", async (req, res) => {
   }
 });
 
-function reciprocalRankFusion(searchResultsDict, k = 60) {
+function reciprocalRankFusion(altQueryDocs, k = 60) {
   const fusedScores = {};
   console.log("Initial individual search result ranks:");
 
-  for (const query in searchResultsDict) {
-    if (searchResultsDict.hasOwnProperty(query)) {
-      const docScores = searchResultsDict[query];
+  for (const query in altQueryDocs) {
+    if (altQueryDocs.hasOwnProperty(query)) {
+      const docScores = altQueryDocs[query];
       console.log(`For query '${query}':`, docScores);
     }
   }
 
-  for (const query in searchResultsDict) {
+  for (const query in altQueryDocs) {
     console.log(query);
-    if (searchResultsDict.hasOwnProperty(query)) {
-      const docScores = searchResultsDict[query];
+    if (altQueryDocs.hasOwnProperty(query)) {
+      const docScores = altQueryDocs[query];
+      console.log(`doc scores for query ${query} `, docScores);
       for (let rank = 0; rank < Object.keys(docScores).length; rank++) {
         const sortedDocs = Object.entries(docScores).sort(
           (a, b) => b[1] - a[1]
@@ -372,7 +364,7 @@ function reciprocalRankFusion(searchResultsDict, k = 60) {
         const previousScore = fusedScores[doc];
         fusedScores[doc] += 1 / (rank + k);
         console.log(
-          `Updating score for ${doc} from ${previousScore} to ${fusedScores[doc]} based on rank ${rank} in query '${query}'`
+          `Updating score for ${docScores.id} from ${previousScore} to ${fusedScores[doc]} based on rank ${rank} in query '${query}'`
         );
       }
     }
@@ -390,10 +382,12 @@ function getRandomInt(min, max) {
 
 async function vectorSearch(query) {
   const docs = await vectorStore.similaritySearch(query);
-  docs.forEach((documentObject) => {
+  // console.log("vectordocs", docs);
+  docs.forEach((documentObject, index) => {
     const pageContentLines = documentObject.pageContent.split("\n");
     const lineNumber = pageContentLines[0];
     documentObject.id = pageContentLines[0];
+    documentObject.score = index;
   });
   return docs;
 
@@ -414,7 +408,7 @@ async function vectorSearch(query) {
 }
 
 async function generateQueries(originalQuery) {
-  const query = `You are a helpful assistant that generates multiple search queries based on a single input query. Generate multiple search queries related to: ${originalQuery}. OUTPUT A COMMA SEPARATED LIST (CSV) of the 4 resulting search queries. The queries themselves should not be listed by number. Do not include the original query in the array`;
+  const query = `You are a helpful assistant that generates alternative queries that could be asked to a large language model related to the users original query: ${originalQuery}. OUTPUT A COMMA SEPARATED LIST (CSV) of 4 alternative queries. The queries themselves should not be listed by number. Do not include the original query in the array`;
   const response = await chain.call({
     query: query,
   });
@@ -550,16 +544,16 @@ const establishLLM = async function (transcript, mode) {
   ]);
 
   if (DO_RRF) {
-    finalOutput = output
+    finalDocs = output
       .map((value) => ({ value, sort: Math.random() }))
       .sort((a, b) => a.sort - b.sort)
       .map(({ value }) => value);
   } else {
-    finalOutput = output;
+    finalDocs = output;
   }
 
   vectorStore = await FaissStore.fromDocuments(
-    finalOutput,
+    finalDocs,
     new OpenAIEmbeddings()
   );
 
