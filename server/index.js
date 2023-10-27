@@ -320,45 +320,73 @@ app.post("/api/performUserQuery", async (req, res) => {
 
     const promises = generatedQueries.map(async (generatedQuery) => {
       const docsFromAltQuery = await vectorSearch(generatedQuery);
-      console.log("docsFromAltQuery", docsFromAltQuery);
+      // console.log("docsFromAltQuery", docsFromAltQuery);
       altQueryDocs[`${generatedQuery}`] = docsFromAltQuery;
     });
 
     // console.log("all results", altQueryDocs);
     Promise.all(promises).then(async () => {
-      console.log("all results", altQueryDocs);
+      // console.log("all results", altQueryDocs);
       const rankedResults = reciprocalRankFusion(altQueryDocs);
       //TODO:MH - these are not sorting properly - given object
-      console.log("Final reranked results", rankedResults);
-      const sortedObject = sortObjectByValues(unsortedObject);
-      console.log("sorted final reranked results", sortedObject);
+      // console.log("Final reranked results", rankedResults);
+      const sortedRankedResults = sortObjectByValues(rankedResults);
+      console.log("final sorted and reranked results", sortedRankedResults);
+
+      const finalDocArray = [];
+      for (const key in sortedRankedResults) {
+        // console.log("Key:", key);
+        const matchingDoc = finalDocs.find((doc) => doc.id === key);
+        if (matchingDoc) {
+          finalDocArray.push(matchingDoc);
+        }
+      }
+
+      // console.log("non rrf docs", finalDocs);
+      // console.log("final doc array", finalDocArray);
+
+      const rrfVectorStore = await FaissStore.fromDocuments(
+        finalDocArray,
+        new OpenAIEmbeddings()
+      );
+
+      const rrfRetriever = rrfVectorStore.asRetriever();
+      const rrfChain = RetrievalQAChain.fromLLM(llm, rrfRetriever);
+
+      const rrfChainResponse = await rrfChain.call({
+        query: query,
+      });
+
       chainResponse = await chain.call({
         query: query,
       });
-      return res.status(200).json({ text: chainResponse.text });
+
+      console.log("rrf chain response", rrfChainResponse.text);
+      console.log("standard response", chainResponse.text);
+
+      return res.status(200).json({
+        text: `Standard Answer: ${chainResponse.text}. \n\n RRF answer: ${rrfChainResponse.text}`,
+      });
     });
   }
 });
 
 function sortObjectByValues(obj) {
-  const sortedKeys = Object.keys(obj).sort((a, b) => obj[b] - obj[a]);
-  const sortedObject = {};
+  const sortedRankedResults = Object.fromEntries(
+    Object.entries(obj).sort(([, a], [, b]) => b - a)
+  );
 
-  for (const key of sortedKeys) {
-    sortedObject[key] = obj[key];
-  }
-
-  return sortedObject;
+  return sortedRankedResults;
 }
 
 function reciprocalRankFusion(altQueryDocs, k = 60) {
   const fusedScores = {};
-  console.log("Initial individual search result ranks:");
+  // console.log("Initial individual search result ranks:");
 
   for (const query in altQueryDocs) {
     if (altQueryDocs.hasOwnProperty(query)) {
       const docScores = altQueryDocs[query];
-      console.log(`For query '${query}':`, docScores);
+      // console.log(`For query '${query}':`, docScores);
     }
   }
 
@@ -366,13 +394,13 @@ function reciprocalRankFusion(altQueryDocs, k = 60) {
     console.log(query);
     if (altQueryDocs.hasOwnProperty(query)) {
       const docObj = altQueryDocs[query];
-      console.log(`doc scores for query ${query} `, docObj);
+      // console.log(`doc scores for query ${query} `, docObj);
       for (let rank = 0; rank < Object.keys(docObj).length; rank++) {
         const sortedDocs = Object.entries(docObj).sort((a, b) => b[1] - a[1]);
-        console.log("sorted docs[rank]=", sortedDocs[rank]);
+        // console.log("sorted docs[rank]=", sortedDocs[rank]);
         const [score, doc] = sortedDocs[rank];
-        console.log("score", score);
-        console.log("doc", doc);
+        // console.log("score", score);
+        // console.log("doc", doc);
         const docID = doc.id;
         const fusedDoc = fusedScores[docID];
         if (!fusedDoc) {
@@ -381,7 +409,7 @@ function reciprocalRankFusion(altQueryDocs, k = 60) {
         const previousScore = fusedScores[docID];
         fusedScores[docID] += 1 / (rank + k);
         console.log(
-          `Updating score for ${docObj.id} from ${previousScore} to ${fusedScores[doc]} based on rank ${rank} in query '${query}'`
+          `Updating score for doc ${docID} from ${previousScore} to ${fusedScores[docID]} based on rank ${rank}`
         );
       }
     }
@@ -790,7 +818,7 @@ async function transcribeEpisode(episodeUrl, mode) {
             llmStatus = "reassembling audio";
             const adjustedTranscript = adjustTranscript(transcription);
             transcription = adjustedTranscript;
-            console.log("final transcription", transcription);
+            // console.log("final transcription", transcription);
             llmStatus = "audio transcribed";
             //remove chunked audio
             outputPaths.forEach((outputPath) => {
@@ -809,7 +837,7 @@ async function transcribeEpisode(episodeUrl, mode) {
         console.log("transcribing audio");
         llmStatus = "transcribing audio";
         transcription = await transcribeAudio(filePath, mode);
-        console.log("transcription");
+        // console.log("transcription ready: ", transcription);
       } catch (error) {
         console.log("error transcribing audio", error);
         return error;

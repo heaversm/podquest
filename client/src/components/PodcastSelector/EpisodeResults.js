@@ -50,7 +50,7 @@ export function EpisodeResults({
         return res.json();
       })
       .then((data) => {
-        console.log("transcribeData", data.message);
+        // console.log("transcribeData", data.message);
         // handleSetQuizQuestions(data.quizQuestions);
         handlePollForStatus();
       })

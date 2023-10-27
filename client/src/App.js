@@ -106,7 +106,7 @@ function App() {
         return res.json();
       })
       .then((data) => {
-        console.log("status data", data.status);
+        console.log("status: ", data.status);
         if (data.status === "ready") {
           console.log("llm ready");
 
