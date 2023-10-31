@@ -1,34 +1,42 @@
-import express from "express";
-import path from "path";
-import dotenv from "dotenv";
-import fs from "fs";
+import express from 'express';
+import path from 'path';
+import dotenv from 'dotenv';
+import fs from 'fs';
 dotenv.config();
 
 //required for upgrade to es modules
-import { fileURLToPath } from "url";
+import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-import crypto from "crypto";
-import axios from "axios";
-import { v4 as uuidv4 } from "uuid";
-import { Configuration, OpenAIApi } from "openai";
+import crypto from 'crypto';
+import axios from 'axios';
+import { v4 as uuidv4 } from 'uuid';
+import { Configuration, OpenAIApi } from 'openai';
 import {
   CharacterTextSplitter,
   RecursiveCharacterTextSplitter,
-} from "langchain/text_splitter";
-import { Document } from "langchain/document";
-import { FaissStore } from "langchain/vectorstores/faiss";
-import { OpenAIEmbeddings } from "langchain/embeddings/openai";
-import { RetrievalQAChain, loadSummarizationChain } from "langchain/chains";
+} from 'langchain/text_splitter';
+import { Document } from 'langchain/document';
+import { FaissStore } from 'langchain/vectorstores/faiss';
+import { OpenAIEmbeddings } from 'langchain/embeddings/openai';
+import {
+  RetrievalQAChain,
+  loadSummarizationChain,
+} from 'langchain/chains';
 
-import { mkdir, writeFile } from "fs/promises";
-import { Readable } from "stream";
-import { finished } from "stream/promises";
+import { mkdir, writeFile } from 'fs/promises';
+import { Readable } from 'stream';
+import { finished } from 'stream/promises';
 
-import ffmpeg from "fluent-ffmpeg";
-import getMP3Duration from "get-mp3-duration";
-import util from "util";
+import ffmpeg from 'fluent-ffmpeg';
+import getMP3Duration from 'get-mp3-duration';
+import util from 'util';
+
+import connectDB from './db.js';
+import { nanoid } from 'nanoid';
+import PodcastEpisode from './models/PodcastEpisode.js';
+import PodcastQueries from './models/PodcastQueries.js';
 
 const statAsync = util.promisify(fs.stat); //get file sizes asynchronously to determine if above API limits
 
@@ -64,52 +72,55 @@ let summarizer; //will hold the summarization chain
 let transcription; //will hold the transcription from openai
 let transcripts = []; //will hold the transcripts from openai if the audio is split into chunks
 let quizQuestions; //will hold the quiz questions if this mode is selected
-let llmStatus = "not ready"; //will hold the status of the llm
+let llmStatus = 'not ready'; //will hold the status of the llm
 
 //llm
-import { OpenAI } from "langchain/llms/openai";
+import { OpenAI } from 'langchain/llms/openai';
 
 const PORT = process.env.PORT || 3001;
 
 const app = express();
+
+connectDB();
+
 app.use(express.json());
 
 // Have Node serve the files for our built React app
-app.use(express.static(path.resolve(__dirname, "../client/build")));
+app.use(express.static(path.resolve(__dirname, '../client/build')));
 
 // Handle GET requests to /api route
-app.get("/api/testOpenAIConfig", async (req, res) => {
-  res.json({ message: "Connected to Server" });
+app.get('/api/testOpenAIConfig', async (req, res) => {
+  res.json({ message: 'Connected to Server' });
 });
 
-app.post("/api/searchForPodcast", async (req, res) => {
+app.post('/api/searchForPodcast', async (req, res) => {
   // console.log(req.body);
   const { podcastName } = req.body;
   const apiKey = process.env.PODCAST_INDEX_API_KEY;
   const apiSecret = process.env.PODCAST_INDEX_API_SECRET;
   const apiHeaderTime = Math.floor(Date.now() / 1000);
-  const sha1Algorithm = "sha1";
+  const sha1Algorithm = 'sha1';
   const sha1Hash = crypto.createHash(sha1Algorithm);
   const data4Hash = apiKey + apiSecret + apiHeaderTime;
   sha1Hash.update(data4Hash);
-  const hash4Header = sha1Hash.digest("hex");
+  const hash4Header = sha1Hash.digest('hex');
   // console.log(`hash4Header=[${hash4Header}]`);
 
   const options = {
-    method: "get",
+    method: 'get',
     headers: {
-      "Content-Type": "application/json",
-      "X-Auth-Date": "" + apiHeaderTime,
-      "X-Auth-Key": apiKey,
+      'Content-Type': 'application/json',
+      'X-Auth-Date': '' + apiHeaderTime,
+      'X-Auth-Key': apiKey,
       Authorization: hash4Header,
-      "User-Agent": "Podquest/1.0",
+      'User-Agent': 'Podquest/1.0',
     },
   };
 
   const url =
-    "https://api.podcastindex.org/api/1.0/search/byterm?q=" +
+    'https://api.podcastindex.org/api/1.0/search/byterm?q=' +
     podcastName +
-    "&max=10";
+    '&max=10';
   //TODO: handle non results, timeout.
   //TODO: replace with fetch
   await axios.get(url, options).then((response) => {
@@ -125,33 +136,33 @@ app.post("/api/searchForPodcast", async (req, res) => {
       // console.log(podcasts);
       res.json({ podcasts });
     } else {
-      console.log("no podcasts found");
-      return res.status(400).json({ error: "No podcasts found" });
+      console.log('no podcasts found');
+      return res.status(400).json({ error: 'No podcasts found' });
     }
   });
 });
 
-app.post("/api/searchForEpisodes", async (req, res) => {
+app.post('/api/searchForEpisodes', async (req, res) => {
   // console.log(req.body);
   const { podcastUrl } = req.body;
   const apiKey = process.env.PODCAST_INDEX_API_KEY;
   const apiSecret = process.env.PODCAST_INDEX_API_SECRET;
   const apiHeaderTime = Math.floor(Date.now() / 1000);
-  const sha1Algorithm = "sha1";
+  const sha1Algorithm = 'sha1';
   const sha1Hash = crypto.createHash(sha1Algorithm);
   const data4Hash = apiKey + apiSecret + apiHeaderTime;
   sha1Hash.update(data4Hash);
-  const hash4Header = sha1Hash.digest("hex");
+  const hash4Header = sha1Hash.digest('hex');
   // console.log(`hash4Header=[${hash4Header}]`);
 
   const options = {
-    method: "get",
+    method: 'get',
     headers: {
-      "Content-Type": "application/json",
-      "X-Auth-Date": "" + apiHeaderTime,
-      "X-Auth-Key": apiKey,
+      'Content-Type': 'application/json',
+      'X-Auth-Date': '' + apiHeaderTime,
+      'X-Auth-Key': apiKey,
       Authorization: hash4Header,
-      "User-Agent": "Podquest/1.0",
+      'User-Agent': 'Podquest/1.0',
     },
   };
 
@@ -173,7 +184,7 @@ app.post("/api/searchForEpisodes", async (req, res) => {
     } else {
       return res
         .status(400)
-        .json({ error: "No episodes found for this podcast" });
+        .json({ error: 'No episodes found for this podcast' });
     }
   });
 });
@@ -185,49 +196,53 @@ const getAudioFromURL = async (url) => {
       // console.log("status", response.statusCode);
 
       if (response.status === 200) {
-        if (!fs.existsSync("downloads")) await mkdir("downloads"); //Optional if you already have downloads directory
+        if (!fs.existsSync('downloads')) await mkdir('downloads'); //Optional if you already have downloads directory
         const fileID = uuidv4();
         const fileName = `${fileID}.mp3`;
-        const destination = path.resolve("./downloads", fileName);
-        const fileStream = fs.createWriteStream(destination, { flags: "wx" });
-        await finished(Readable.fromWeb(response.body).pipe(fileStream));
+        const destination = path.resolve('./downloads', fileName);
+        const fileStream = fs.createWriteStream(destination, {
+          flags: 'wx',
+        });
+        await finished(
+          Readable.fromWeb(response.body).pipe(fileStream)
+        );
         // console.log(destination);
         return resolve(destination);
       } else {
         //reject with the error message
-        return reject("Error retrieving MP3 file");
+        return reject('Error retrieving MP3 file');
       }
     } catch (error) {
-      console.error("error retrieving mp3 file", error);
+      console.error('error retrieving mp3 file', error);
     }
   }).catch((error) => {
-    console.error("Unhandled rejection:", error);
+    console.error('Unhandled rejection:', error);
   });
 };
 
-app.get("/api/getQuizQuestions", async (req, res) => {
+app.get('/api/getQuizQuestions', async (req, res) => {
   if (quizQuestions && quizQuestions.length > 0) {
-    console.log("quizQuestions", quizQuestions);
+    console.log('quizQuestions', quizQuestions);
     return res.status(200).json({ quizQuestions: quizQuestions });
   } else {
-    return res.status(404).json({ error: "No quiz questions found" });
+    return res.status(404).json({ error: 'No quiz questions found' });
   }
 });
 
-app.get("/playAudio", (req, res) => {
+app.get('/playAudio', (req, res) => {
   const filePath = req.body;
 
   // Check if the file exists
   fs.access(filePath, fs.constants.R_OK, (err) => {
     if (err) {
-      console.error("Error accessing the audio file:", err);
-      return res.status(404).send("Audio file not found");
+      console.error('Error accessing the audio file:', err);
+      return res.status(404).send('Audio file not found');
     }
 
     // Set appropriate headers for streaming the audio
     res.set({
-      "Content-Type": "audio/mpeg", // Adjust the content type based on your audio file format
-      "Content-Length": fs.statSync(filePath).size,
+      'Content-Type': 'audio/mpeg', // Adjust the content type based on your audio file format
+      'Content-Length': fs.statSync(filePath).size,
     });
 
     // Create a read stream to read the audio file
@@ -238,12 +253,12 @@ app.get("/playAudio", (req, res) => {
   });
 });
 
-app.post("/api/performUserQuery", async (req, res) => {
+app.post('/api/performUserQuery', async (req, res) => {
   const { query, mode, quizQuestion } = req.body;
-  console.log("query,mode,quiz", query, mode, quizQuestion);
+  console.log('query,mode,quiz', query, mode, quizQuestion);
   let chainResponse;
 
-  if (mode === "quiz") {
+  if (mode === 'quiz') {
     let isCorrect = null;
 
     let finalQuery = `The user answered this question: ${quizQuestion}. The user's answer was: ${query}. Is this correct?"`;
@@ -255,7 +270,7 @@ app.post("/api/performUserQuery", async (req, res) => {
     if (RESPOND_YES_NO) {
       finalQuery += `Respond with only "yes" or "no"`;
     } else if (BE_CONCISE) {
-      finalQuery += "Be concise in your response.";
+      finalQuery += 'Be concise in your response.';
     }
 
     chainResponse = await chain.call({
@@ -265,14 +280,14 @@ app.post("/api/performUserQuery", async (req, res) => {
     const chainResponseText = chainResponse.text
       .trim()
       .toLowerCase()
-      .replace(/[^a-zA-Z ]/g, "");
-    console.log("chainResponseText", chainResponseText);
+      .replace(/[^a-zA-Z ]/g, '');
+    console.log('chainResponseText', chainResponseText);
 
     let yesIndex, noIndex;
     //look for word yes in chain response text and parse it out...
-    yesIndex = chainResponseText.indexOf("yes");
+    yesIndex = chainResponseText.indexOf('yes');
     if (yesIndex === -1) {
-      noIndex = chainResponseText.indexOf("no");
+      noIndex = chainResponseText.indexOf('no');
       if (noIndex === -1) {
         //perform sentiment analysis to determine positivity / negativity
         const sentimentResponse = await chain.call({
@@ -280,16 +295,16 @@ app.post("/api/performUserQuery", async (req, res) => {
         });
         //convert sentimentResponse.text to a lowercase string:
         let sentimentResponseText = sentimentResponse.text.trim();
-        sentimentResponseText.replace(/[^a-zA-Z ]/g, "");
+        sentimentResponseText.replace(/[^a-zA-Z ]/g, '');
         sentimentResponseText = sentimentResponseText.toLowerCase();
 
-        console.log("sentimentResponse", sentimentResponseText);
+        console.log('sentimentResponse', sentimentResponseText);
 
-        if (sentimentResponseText == "positive") {
-          console.log("true");
+        if (sentimentResponseText == 'positive') {
+          console.log('true');
           isCorrect = true;
         } else {
-          console.log("false");
+          console.log('false');
           isCorrect = false;
         }
       } else {
@@ -301,7 +316,7 @@ app.post("/api/performUserQuery", async (req, res) => {
     return res
       .status(200)
       .json({ text: chainResponse.text, isCorrect: isCorrect });
-  } else if (mode === "audio") {
+  } else if (mode === 'audio') {
     let finalQuery = `The question is: ${query}. Respond with the timestamp from the podcast where the answer to the question can be found. The format should only be a valid timestamp of the format hh:mm:ss. If the answer to the question cannot be found in the podcast, respond with "Answer not found".`;
     chainResponse = await chain.call({
       query: finalQuery,
@@ -317,14 +332,14 @@ app.post("/api/performUserQuery", async (req, res) => {
 
 function removeQueryParams(origURL) {
   const url = new URL(origURL);
-  console.log("rqp", url);
+  console.log('rqp', url);
   const nonParamURL = url.origin + url.pathname;
   return nonParamURL;
 }
 
 async function splitAudioIntoChunks(filePath) {
   return new Promise((resolve, reject) => {
-    console.log("splitting into chunks");
+    console.log('splitting into chunks');
     const buffer = fs.readFileSync(filePath);
     const duration = getMP3Duration(buffer);
 
@@ -347,19 +362,21 @@ async function splitAudioIntoChunks(filePath) {
         );
 
         await new Promise((resolveChunk, rejectChunk) => {
-          let tempPath = filePath.replace(".mp3", "");
+          let tempPath = filePath.replace('.mp3', '');
           const outputPath = `${tempPath}_${chunkIndex}.mp3`;
           outputPaths.push(outputPath);
           ffmpeg(filePath)
             .setStartTime(startTime)
             .setDuration(endTime - startTime)
             .output(outputPath)
-            .on("end", () => {
+            .on('end', () => {
               llmStatus = `exported chunk ${chunkIndex} of ${numChunks}`;
-              console.log(`Chunk ${chunkIndex} exported successfully`);
+              console.log(
+                `Chunk ${chunkIndex} exported successfully`
+              );
               resolveChunk();
             })
-            .on("error", (err) => {
+            .on('error', (err) => {
               console.error(
                 `Error exporting chunk ${chunkIndex}:`,
                 err.message
@@ -372,11 +389,11 @@ async function splitAudioIntoChunks(filePath) {
     } //end exportChunksSequentially
     exportChunksSequentially()
       .then(() => {
-        console.log("All chunks exported successfully");
+        console.log('All chunks exported successfully');
         resolve(outputPaths);
       })
       .catch((err) => {
-        console.error("Error exporting chunks:", err.message);
+        console.error('Error exporting chunks:', err.message);
         reject(err);
       });
   });
@@ -388,13 +405,13 @@ async function transcribeAudioChunks(outputPaths, mode) {
     async function transcribeAudioChunkSequentially() {
       for (let i = 0; i < outputPaths.length; i++) {
         const filePath = outputPaths[i];
-        const transcriptionFormat = "srt";
+        const transcriptionFormat = 'srt';
         await new Promise(async (resolve, reject) => {
           openai
             .createTranscription(
               fs.createReadStream(filePath),
-              "whisper-1",
-              "", //prompt, unused
+              'whisper-1',
+              '', //prompt, unused
               transcriptionFormat
             )
             .then((response) => {
@@ -407,7 +424,7 @@ async function transcribeAudioChunks(outputPaths, mode) {
               resolve();
             })
             .catch((err) => {
-              console.log("transcription error!", err);
+              console.log('transcription error!', err);
               reject(err);
             });
         });
@@ -416,11 +433,11 @@ async function transcribeAudioChunks(outputPaths, mode) {
 
     transcribeAudioChunkSequentially()
       .then(() => {
-        console.log("All chunks exported successfully");
+        console.log('All chunks exported successfully');
         resolve(transcripts);
       })
       .catch((err) => {
-        console.error("Error exporting chunks:", err.message);
+        console.error('Error exporting chunks:', err.message);
         reject(err);
       });
   });
@@ -452,29 +469,32 @@ const removeFile = async (filePath) => {
   if (!LOAD_AUDIO_FROM_FILE) {
     fs.unlink(filePath, (err) => {
       if (err) {
-        console.error("error removing file");
-        return { status: "error", error: err };
+        console.error('error removing file');
+        return { status: 'error', error: err };
       } else {
-        return { status: "success" };
+        return { status: 'success' };
       }
     });
   } else {
-    return { status: "success" };
+    return { status: 'success' };
   }
 };
 
 function adjustTranscript(originalTranscript) {
-  const modifiedTranscript = originalTranscript.replace(/^\s*$/gm, "");
+  const modifiedTranscript = originalTranscript.replace(
+    /^\s*$/gm,
+    ''
+  );
 
   // console.log(modifiedTranscript);
 
-  const newTranscript = modifiedTranscript.trim().split("\n\n");
+  const newTranscript = modifiedTranscript.trim().split('\n\n');
   //console.log(newTranscript);
 
   const newTranscriptEntries = [];
 
   newTranscript.map((entry) => {
-    const lines = entry.split("\n");
+    const lines = entry.split('\n');
     newTranscriptEntries.push(lines);
   });
 
@@ -483,7 +503,8 @@ function adjustTranscript(originalTranscript) {
   let finalTranscript = [];
 
   function timeToMillis(time) {
-    const [hours, minutes, seconds, milliseconds] = time.split(/[:,.]/);
+    const [hours, minutes, seconds, milliseconds] =
+      time.split(/[:,.]/);
     return (
       parseInt(hours) * 3600000 +
       parseInt(minutes) * 60000 +
@@ -494,7 +515,7 @@ function adjustTranscript(originalTranscript) {
 
   function millisToTime(millis) {
     const date = new Date(millis);
-    return date.toISOString().substr(11, 12).replace(".", ",");
+    return date.toISOString().substr(11, 12).replace('.', ',');
   }
 
   newTranscriptEntries.forEach((entry, index) => {
@@ -519,11 +540,11 @@ function adjustTranscript(originalTranscript) {
         entry[0] = `${prevLine + 1}`;
 
         const prevTime = prevEntry[1];
-        const prevTimestamps = prevTime.split(" --> ");
+        const prevTimestamps = prevTime.split(' --> ');
         const prevEndTime = prevTimestamps[1];
         // console.log(prevEndTime);
         const curTime = newTranscriptEntries[index][1];
-        const curTimestamps = curTime.split(" --> ");
+        const curTimestamps = curTime.split(' --> ');
         // console.log(curTimestamps);
 
         const offsetMillis = timeToMillis(prevEndTime);
@@ -538,9 +559,10 @@ function adjustTranscript(originalTranscript) {
         const adjustedTimeStart = millisToTime(adjustedStart);
         const adjustedTimeEnd = millisToTime(adjustedEnd);
         // console.log(adjustedTimeStart, adjustedTimeEnd);
-        const joinedTimestampString = [adjustedTimeStart, adjustedTimeEnd].join(
-          " --> "
-        );
+        const joinedTimestampString = [
+          adjustedTimeStart,
+          adjustedTimeEnd,
+        ].join(' --> ');
         // console.log(joinedTimestampString);
         entry[1] = joinedTimestampString;
         // console.log(entry);
@@ -552,19 +574,19 @@ function adjustTranscript(originalTranscript) {
   });
 
   const formattedTranscript = finalTranscript
-    .map((array) => array.join("\n"))
-    .join("\n\n");
+    .map((array) => array.join('\n'))
+    .join('\n\n');
   // console.log(formattedTranscript);
   return formattedTranscript;
 }
 
-app.get("/api/downloadTranscript", async (req, res) => {
+app.get('/api/downloadTranscript', async (req, res) => {
   // console.log("return transcript", transcription);
   res.json({ transcription: transcription });
 });
 
-app.get("/api/getStatus", async (req, res) => {
-  if (llmStatus === "ready") {
+app.get('/api/getStatus', async (req, res) => {
+  if (llmStatus === 'ready') {
     return res.status(200).json({ status: llmStatus });
   } else {
     return res.status(202).json({ status: llmStatus });
@@ -575,8 +597,8 @@ const transcribeAudio = async (filePath, mode) => {
   let transcript;
   if (LOAD_TRANSCRIPT_FROM_FILE) {
     transcript = fs.readFileSync(
-      path.join(__dirname, "../", "transcript_w_timestamps.txt"),
-      "utf8"
+      path.join(__dirname, '../', 'transcript_w_timestamps.txt'),
+      'utf8'
     );
     // console.log(transcript, "transcription");
     return transcript;
@@ -585,17 +607,17 @@ const transcribeAudio = async (filePath, mode) => {
     // const transcriptionFormat = mode === "audio" ? "srt" : "text";
     let transcriptionFormat;
     if (FORCE_SRT) {
-      transcriptionFormat = "srt";
+      transcriptionFormat = 'srt';
     } else {
-      transcriptionFormat = mode === "audio" ? "srt" : "text";
+      transcriptionFormat = mode === 'audio' ? 'srt' : 'text';
     }
 
     // console.log("filePath", filePath, transcriptionFormat);
     transcript = await openai
       .createTranscription(
         fs.createReadStream(filePath),
-        "whisper-1",
-        "", //prompt, unused
+        'whisper-1',
+        '', //prompt, unused
         transcriptionFormat
       )
       .then((response) => {
@@ -603,55 +625,56 @@ const transcribeAudio = async (filePath, mode) => {
         return response.data;
       })
       .catch((err) => {
-        console.log("transcription error!", err);
-        return "maxlength";
+        console.log('transcription error!', err);
+        return 'maxlength';
       });
     return transcript;
   }
 };
 
-async function transcribeEpisode(episodeUrl, mode) {
+async function transcribeEpisode(episodeUrl, mode, episodeTitle) {
   let keepAliveTimer;
   let filePath;
-  llmStatus = "downloading audio";
+  llmStatus = 'downloading audio';
   if (LOAD_AUDIO_FROM_FILE) {
-    filePath = path.join(__dirname, "../audio.mp3");
+    filePath = path.join(__dirname, '../audio.mp3');
   } else {
     try {
       filePath = await getAudioFromURL(episodeUrl);
     } catch (error) {
-      console.log("error getting audio file", error);
+      console.log('error getting audio file', error);
       // return res.status(500).json({ error: error });
     }
   }
 
   //MH TODO: check file size
   const generateTranscriptions = async () => {
-    llmStatus = "getting file size";
+    llmStatus = 'getting file size';
     const stats = await statAsync(filePath);
 
     const fileSizeInMB = stats.size / 1024 / 1024;
-    console.log("fs in MB", fileSizeInMB, "max", MAX_FILE_SIZE);
+    console.log('fs in MB', fileSizeInMB, 'max', MAX_FILE_SIZE);
 
     if (fileSizeInMB > MAX_FILE_SIZE) {
-      console.log("file size too large, splitting audio");
-      llmStatus = "splitting audio";
+      console.log('file size too large, splitting audio');
+      llmStatus = 'splitting audio';
       try {
         const outputPaths = await splitAudioIntoChunks(filePath);
 
-        llmStatus = "transcribing chunks";
-        console.log("transcribing chunks");
+        llmStatus = 'transcribing chunks';
+        console.log('transcribing chunks');
 
         await transcribeAudioChunks(outputPaths, mode).then(
           (chunkedTranscripts) => {
-            transcription = chunkedTranscripts.join(""); // Combine all chunk transcripts
+            transcription = chunkedTranscripts.join(''); // Combine all chunk transcripts
 
             //TODO: need to adjust transcript timestamps to account for chunking
-            llmStatus = "reassembling audio";
-            const adjustedTranscript = adjustTranscript(transcription);
+            llmStatus = 'reassembling audio';
+            const adjustedTranscript =
+              adjustTranscript(transcription);
             transcription = adjustedTranscript;
-            console.log("final transcription", transcription);
-            llmStatus = "audio transcribed";
+            console.log('final transcription', transcription);
+            llmStatus = 'audio transcribed';
             //remove chunked audio
             outputPaths.forEach((outputPath) => {
               removeFile(outputPath);
@@ -661,32 +684,40 @@ async function transcribeEpisode(episodeUrl, mode) {
           }
         );
       } catch (error) {
-        console.log("error splitting audio", error);
+        console.log('error splitting audio', error);
       }
     } else {
-      console.log("file size ok");
+      console.log('file size ok');
       try {
-        console.log("transcribing audio");
-        llmStatus = "transcribing audio";
+        console.log('transcribing audio');
+        llmStatus = 'transcribing audio';
         transcription = await transcribeAudio(filePath, mode);
-        console.log("transcription");
+        const episodeEntry = new PodcastEpisode({
+          episodeId: nanoid(),
+          episodeUrl: episodeUrl,
+          episodeTitle: episodeTitle,
+          episodeTranscript: transcription,
+        });
+
+        await episodeEntry.save();
+        console.log('transcription');
       } catch (error) {
-        console.log("error transcribing audio", error);
+        console.log('error transcribing audio', error);
         return error;
       }
 
       const removeResult = removeFile(filePath);
-      if (removeResult.status === "error") {
+      if (removeResult.status === 'error') {
         console.error(removeResult.error);
         return removeResult.error;
       }
     }
 
-    console.log("establishing llm");
-    llmStatus = "establishing llm";
+    console.log('establishing llm');
+    llmStatus = 'establishing llm';
     const output = await establishLLM(transcription, mode);
-    llmStatus = "generating quiz";
-    console.log("llm established, generating quiz questions");
+    llmStatus = 'generating quiz';
+    console.log('llm established, generating quiz questions');
 
     // let query = `You are a college teacher, asking college students questions about the stories mentioned in the podcast whose answers summarize the key topics. Be creative. Generate 5 quiz questions. Do not include mention of any line numbers or timestamps in your questions.`;
 
@@ -694,11 +725,13 @@ async function transcribeEpisode(episodeUrl, mode) {
 
     if (USE_ONLY_SUMMARY) {
       //MH - currently fails because output is not returned from establishLLM
-      summarizer = loadSummarizationChain(llm, { type: "map_reduce" }); //stuff, map_reduce, refine
+      summarizer = loadSummarizationChain(llm, {
+        type: 'map_reduce',
+      }); //stuff, map_reduce, refine
       const summary = await summarizer.call({
         input_documents: output,
       });
-      console.log("summary", summary);
+      console.log('summary', summary);
 
       query += ` Use only this summary to generate the questions: ${summary}`;
     }
@@ -706,23 +739,29 @@ async function transcribeEpisode(episodeUrl, mode) {
     const quizQuestionsResponse = await chain.call({
       query: query,
     });
-    console.log("all quiz questions generated", quizQuestionsResponse.text);
+    console.log(
+      'all quiz questions generated',
+      quizQuestionsResponse.text
+    );
 
     if (quizQuestionsResponse?.text) {
       const inputText = quizQuestionsResponse.text;
-      const lines = inputText.split("\n");
+      const lines = inputText.split('\n');
       if (lines.length > 0) {
         const questions = lines
           .map((line) => line.trim()) // Remove leading/trailing whitespace
           .filter((line) => line.length > 0) // Filter out empty lines
           .filter((line) => /^\d+\.\s/.test(line)) // Filter lines that start with a number and a period
-          .map((line) => line.replace(/^\d+\.\s/, "")); // Remove the numbering
+          .map((line) => line.replace(/^\d+\.\s/, '')); // Remove the numbering
         if (questions.length > 0) {
           if (NUM_QUIZ_QUESTIONS_TO_GENERATE !== NUM_QUIZ_QUESTIONS) {
             const sliceIndex =
               NUM_QUIZ_QUESTIONS_TO_GENERATE - NUM_QUIZ_QUESTIONS;
             //keep only the questions from the sliceIndex to the end of the array
-            quizQuestions = questions.slice(sliceIndex, questions.length - 1);
+            quizQuestions = questions.slice(
+              sliceIndex,
+              questions.length - 1
+            );
           } else {
             quizQuestions = questions;
           }
@@ -737,21 +776,23 @@ async function transcribeEpisode(episodeUrl, mode) {
   }; //end generateTranscriptions
 
   await generateTranscriptions();
-  console.log("all done");
-  llmStatus = "ready";
-  return "ready";
+  console.log('all done');
+  llmStatus = 'ready';
+  return 'ready';
 }
 
-app.post("/api/transcribeEpisode", async (req, res) => {
-  const { episodeUrl, mode } = req.body;
-  transcribeEpisode(episodeUrl, mode);
-  llmStatus = "initializing";
-  res.status(202).json({ message: "Transcription in progress" });
+app.post('/api/transcribeEpisode', async (req, res) => {
+  const { episodeUrl, mode, episodeTitle } = req.body;
+  transcribeEpisode(episodeUrl, mode, episodeTitle);
+  llmStatus = 'initializing';
+  res.status(202).json({ message: 'Transcription in progress' });
 });
 
 // All other GET requests not handled before will return our React app
-app.get("*", (req, res) => {
-  res.sendFile(path.resolve(__dirname, "../client/build", "index.html"));
+app.get('*', (req, res) => {
+  res.sendFile(
+    path.resolve(__dirname, '../client/build', 'index.html')
+  );
 });
 
 app.listen(PORT, () => {
