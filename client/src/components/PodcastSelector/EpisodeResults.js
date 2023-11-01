@@ -28,7 +28,41 @@ export function EpisodeResults({
     }
   }, [episode]);
 
-  const handleEpisodeChange = (e, child) => {
+  const searchForTranscript = async (episodeUrl, episodeTitle) => {
+    return new Promise((resolve, reject) => {
+      handleSetStatusMessage({
+        message: 'Searching for existing transcript...',
+        type: 'info',
+      });
+
+      fetch('/api/searchForTranscript', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ episodeUrl }),
+      })
+        .then((res) => {
+          return res.json();
+        })
+        .then((data) => {
+          console.log('does transcript exist?', data.transcript);
+
+          if (!data.transcript) {
+            resolve(false);
+          } else {
+            console.log('transcript exists');
+            //if transcript exists, establish llm with this transcript
+            resolve(true);
+          }
+        })
+        .catch((err) => {
+          console.log('err', err);
+        });
+    });
+  };
+
+  const handleEpisodeChange = async (e, child) => {
     e.preventDefault();
     const episodeUrl = e.target.value;
     const episodeTitle = child.props.children; //the child is the MenuItem component, the children of this is the value of the MenuItem
@@ -39,6 +73,19 @@ export function EpisodeResults({
       return;
     }
 
+    //check for existing episode URL in DB
+    const hasTranscript = await searchForTranscript(episodeUrl, mode);
+    console.log('hasTranscript', hasTranscript);
+    //if no existing episode URL, transcribe episode
+    if (hasTranscript) {
+      handlePollForStatus();
+      //create llm with existing transcript
+    } else {
+      transcribeEpisode(episodeUrl, episodeTitle);
+    }
+  };
+
+  const transcribeEpisode = (episodeUrl, episodeTitle) => {
     handleSetStatusMessage({
       message: 'Transcribing audio, get comfortable...',
       type: 'info',
