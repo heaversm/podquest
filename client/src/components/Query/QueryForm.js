@@ -1,9 +1,9 @@
-import Button from "@mui/material/Button";
-import TextField from "@mui/material/TextField";
-import Box from "@mui/material/Box";
-import Typography from "@mui/material/Typography";
+import Button from '@mui/material/Button';
+import TextField from '@mui/material/TextField';
+import Box from '@mui/material/Box';
+import Typography from '@mui/material/Typography';
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from 'react';
 export function QueryForm({
   llmReady,
   handleSetQueryResults,
@@ -13,10 +13,11 @@ export function QueryForm({
   quizQuestions,
   mode,
   gameOver,
+  episodeId,
 }) {
-  const [query, setQuery] = React.useState("");
+  const [query, setQuery] = React.useState('');
   const [totalPoints, setTotalPoints] = useState(0); //current quiz question
-  const [quizText, setQuizText] = useState("");
+  const [quizText, setQuizText] = useState('');
 
   useEffect(() => {
     handleSetTotalPoints(totalPoints);
@@ -25,27 +26,32 @@ export function QueryForm({
   const handleQuerySearch = (e) => {
     e.preventDefault();
     handleSetStatusMessage({
-      message: "Searching for answers...",
-      type: "info",
+      message: 'Searching for answers...',
+      type: 'info',
     });
-    fetch("/api/performUserQuery", {
-      method: "POST",
+    fetch('/api/performUserQuery', {
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ query, mode, quizQuestion: quizText }),
+      body: JSON.stringify({
+        query,
+        mode,
+        quizQuestion: quizText,
+        episodeId: episodeId,
+      }),
     })
       .then((res) => res.json())
       .then((data) => {
-        if (mode === "quiz") {
+        if (mode === 'quiz') {
           // console.log("isCorrect?", data.isCorrect ? "true" : "false");
-          setQuery("");
+          setQuery('');
           if (data.isCorrect) {
             let curPoints = totalPoints;
             setTotalPoints((curPoints += 1));
             handleSetStatusMessage({
-              message: data.isCorrect ? "Correct!" : "Incorrect!",
-              type: data.isCorrect ? "success" : "error",
+              message: data.isCorrect ? 'Correct!' : 'Incorrect!',
+              type: data.isCorrect ? 'success' : 'error',
             });
           }
         } else {
@@ -54,7 +60,7 @@ export function QueryForm({
         handleSetQueryResults(data.text);
       })
       .catch((err) => {
-        console.log("err", err);
+        console.log('err', err);
       });
   };
 
@@ -76,7 +82,7 @@ export function QueryForm({
         autoComplete="off"
         onSubmit={handleQuerySearch}
       >
-        {quizQuestion !== null && mode === "quiz" && (
+        {quizQuestion !== null && mode === 'quiz' && (
           <Typography
             component="h5"
             variant="h6"
@@ -113,7 +119,7 @@ export function QueryForm({
         >
           Submit
         </Button>
-        {mode === "quiz" && totalPoints !== null && (
+        {mode === 'quiz' && totalPoints !== null && (
           <Typography>Points: {totalPoints}</Typography>
         )}
       </Box>

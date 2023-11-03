@@ -18,6 +18,7 @@ export function EpisodeResults({
   handleSetFilePath,
   handleSetQuizQuestions,
   handlePollForStatus,
+  handleSetEpisodeId,
   mode,
 }) {
   const [episode, setEpisode] = React.useState('');
@@ -46,12 +47,10 @@ export function EpisodeResults({
           return res.json();
         })
         .then((data) => {
-          console.log('does transcript exist?', data.transcript);
-
           if (!data.transcript) {
             resolve(false);
           } else {
-            console.log('transcript exists');
+            handleSetEpisodeId(data.episodeId);
             //if transcript exists, establish llm with this transcript
             resolve(true);
           }
@@ -66,7 +65,7 @@ export function EpisodeResults({
     e.preventDefault();
     const episodeUrl = e.target.value;
     const episodeTitle = child.props.children; //the child is the MenuItem component, the children of this is the value of the MenuItem
-    console.log(episodeTitle);
+    // console.log(episodeTitle);
     setEpisode(episodeUrl);
 
     if (!episodeTitle) {
@@ -75,7 +74,6 @@ export function EpisodeResults({
 
     //check for existing episode URL in DB
     const hasTranscript = await searchForTranscript(episodeUrl, mode);
-    console.log('hasTranscript', hasTranscript);
     //if no existing episode URL, transcribe episode
     if (hasTranscript) {
       handlePollForStatus();

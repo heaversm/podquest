@@ -254,8 +254,14 @@ app.get('/playAudio', (req, res) => {
 });
 
 app.post('/api/performUserQuery', async (req, res) => {
-  const { query, mode, quizQuestion } = req.body;
-  console.log('query,mode,quiz', query, mode, quizQuestion);
+  const { query, mode, quizQuestion, episodeId } = req.body;
+  console.log(
+    'query,mode,question,episodeId',
+    query,
+    mode,
+    quizQuestion,
+    episodeId
+  );
   let chainResponse;
 
   if (mode === 'quiz') {
@@ -326,7 +332,18 @@ app.post('/api/performUserQuery', async (req, res) => {
     chainResponse = await chain.call({
       query: query,
     });
-    return res.status(200).json({ text: chainResponse.text });
+
+    const queryResponse = chainResponse.text;
+
+    //MH TODO: check if query exists for this podcast and return the cached result? Or generate new each time?
+    const podcastQuery = new PodcastQueries({
+      episodeRef: episodeId,
+      query: query,
+      queryResponse: queryResponse,
+    });
+
+    await podcastQuery.save();
+    return res.status(200).json({ text: queryResponse });
   }
 });
 
@@ -469,6 +486,7 @@ const removeFile = async (filePath) => {
   if (!LOAD_AUDIO_FROM_FILE) {
     fs.unlink(filePath, (err) => {
       if (err) {
+        console.log(filePath);
         console.error('error removing file');
         return { status: 'error', error: err };
       } else {
@@ -723,6 +741,7 @@ async function transcribeEpisode(episodeUrl, mode, episodeTitle) {
 
     const fileSizeInMB = stats.size / 1024 / 1024;
     console.log('fs in MB', fileSizeInMB, 'max', MAX_FILE_SIZE);
+    //TODO:MH - there are still instances where being under MAX_FILE_SIZE results in a BODY LENGTH EXCEEDED ERROR from Whisper
 
     if (fileSizeInMB > MAX_FILE_SIZE) {
       console.log('file size too large, splitting audio');
@@ -742,7 +761,7 @@ async function transcribeEpisode(episodeUrl, mode, episodeTitle) {
             const adjustedTranscript =
               adjustTranscript(transcription);
             transcription = adjustedTranscript;
-            console.log('final transcription', transcription);
+            // console.log('final transcription', transcription);
             llmStatus = 'audio transcribed';
             //remove chunked audio
             outputPaths.forEach((outputPath) => {
@@ -766,26 +785,25 @@ async function transcribeEpisode(episodeUrl, mode, episodeTitle) {
         console.log('error transcribing audio', error);
         return error;
       }
+    }
 
-      const episodeId = nanoid();
-      const episodeEntry = new PodcastEpisode({
-        episodeId: episodeId,
-        episodeUrl: episodeUrl,
-        episodeTitle: episodeTitle,
-        episodeTranscript: transcription,
-      });
+    const episodeId = nanoid();
+    const episodeEntry = new PodcastEpisode({
+      episodeId: episodeId,
+      episodeUrl: episodeUrl,
+      episodeTitle: episodeTitle,
+      episodeTranscript: transcription,
+    });
 
-      await episodeEntry.save();
+    await episodeEntry.save();
 
-      const removeResult = removeFile(filePath);
-      if (removeResult.status === 'error') {
-        console.error(removeResult.error);
-        return removeResult.error;
-      }
+    const removeResult = removeFile(filePath);
+    if (removeResult.status === 'error') {
+      console.error(removeResult.error);
+      return removeResult.error;
     }
 
     initiateLLM(transcription, mode);
-    return;
   }; //end generateTranscriptions
 
   await generateTranscriptions();
@@ -799,13 +817,17 @@ app.post('/api/searchForTranscript', async (req, res) => {
     episodeUrl: episodeUrl,
   });
   if (podcastEpisode) {
-    console.log('episode url found', podcastEpisode.episodeId);
+    console.log(
+      'episode url found, id is:',
+      podcastEpisode.episodeId
+    );
     //set the transcription global and establish llm from there
     if (podcastEpisode.episodeTranscript) {
       transcription = podcastEpisode.episodeTranscript;
       initiateLLM(transcription, mode);
       return res.status(200).json({
         transcript: true,
+        episodeId: podcastEpisode.episodeId,
         message: 'episode transcript found',
       });
     } else {
@@ -829,6 +851,23 @@ app.post('/api/transcribeEpisode', async (req, res) => {
   transcribeEpisode(episodeUrl, mode, episodeTitle);
   llmStatus = 'initializing';
   res.status(202).json({ message: 'Transcription in progress' });
+});
+
+app.post('/api/getEpisodeId', async (req, res) => {
+  const { episodeUrl } = req.body;
+  console.log('getEpisodeId from URL', episodeUrl);
+
+  const podcastEpisode = await PodcastEpisode.findOne({
+    episodeUrl: episodeUrl,
+  });
+  if (podcastEpisode.episodeId) {
+    res.status(200).json({
+      message: 'episode found',
+      episodeId: podcastEpisode.episodeId,
+    });
+  } else {
+    res.status(404).json({ message: 'episode not found' });
+  }
 });
 
 // All other GET requests not handled before will return our React app

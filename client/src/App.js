@@ -1,37 +1,37 @@
 // client/src/App.js
-import "@fontsource/roboto/300.css";
-import "@fontsource/roboto/400.css";
-import "@fontsource/roboto/500.css";
-import "@fontsource/roboto/700.css";
+import '@fontsource/roboto/300.css';
+import '@fontsource/roboto/400.css';
+import '@fontsource/roboto/500.css';
+import '@fontsource/roboto/700.css';
 
-import React, { useEffect, useState, useRef } from "react";
-import Button from "@mui/material/Button";
-import Card from "@mui/material/Card";
-import CardActions from "@mui/material/CardActions";
-import CardContent from "@mui/material/CardContent";
-import CardMedia from "@mui/material/CardMedia";
-import CssBaseline from "@mui/material/CssBaseline";
-import Grid from "@mui/material/Grid";
-import Stack from "@mui/material/Stack";
-import Box from "@mui/material/Box";
-import Typography from "@mui/material/Typography";
-import Container from "@mui/material/Container";
-import Link from "@mui/material/Link";
-import Snackbar from "@mui/material/Snackbar";
-import MuiAlert from "@mui/material/Alert";
-import { createTheme, ThemeProvider } from "@mui/material/styles";
-import { deepPurple, amber, blueGrey } from "@mui/material/colors";
+import React, { useEffect, useState, useRef } from 'react';
+import Button from '@mui/material/Button';
+import Card from '@mui/material/Card';
+import CardActions from '@mui/material/CardActions';
+import CardContent from '@mui/material/CardContent';
+import CardMedia from '@mui/material/CardMedia';
+import CssBaseline from '@mui/material/CssBaseline';
+import Grid from '@mui/material/Grid';
+import Stack from '@mui/material/Stack';
+import Box from '@mui/material/Box';
+import Typography from '@mui/material/Typography';
+import Container from '@mui/material/Container';
+import Link from '@mui/material/Link';
+import Snackbar from '@mui/material/Snackbar';
+import MuiAlert from '@mui/material/Alert';
+import { createTheme, ThemeProvider } from '@mui/material/styles';
+import { deepPurple, amber, blueGrey } from '@mui/material/colors';
 // import "./App.css";
 
-import { PodcastForm } from "./components/PodcastSelector/PodcastForm";
-import { PodcastResults } from "./components/PodcastSelector/PodcastResults";
-import { EpisodeResults } from "./components/PodcastSelector/EpisodeResults";
-import { QueryForm } from "./components/Query/QueryForm";
-import { QueryResults } from "./components/Query/QueryResults";
-import { PageIntro } from "./components/Header/PageIntro";
-import { ModeSelector } from "./components/Header/ModeSelector";
-import { Footer } from "./components/Footer/Footer";
-import { Feedback } from "./components/Feedback/Feedback";
+import { PodcastForm } from './components/PodcastSelector/PodcastForm';
+import { PodcastResults } from './components/PodcastSelector/PodcastResults';
+import { EpisodeResults } from './components/PodcastSelector/EpisodeResults';
+import { QueryForm } from './components/Query/QueryForm';
+import { QueryResults } from './components/Query/QueryResults';
+import { PageIntro } from './components/Header/PageIntro';
+import { ModeSelector } from './components/Header/ModeSelector';
+import { Footer } from './components/Footer/Footer';
+import { Feedback } from './components/Feedback/Feedback';
 
 //colors:
 // https://mui.com/material-ui/customization/color/#color-palette
@@ -47,7 +47,9 @@ const myTheme = createTheme({
 });
 
 const Alert = React.forwardRef(function Alert(props, ref) {
-  return <MuiAlert elevation={6} ref={ref} variant="outlined" {...props} />;
+  return (
+    <MuiAlert elevation={6} ref={ref} variant="outlined" {...props} />
+  );
 });
 
 function App() {
@@ -63,9 +65,10 @@ function App() {
   const [quizQuestion, setCurQuizQuestion] = useState(null); //current quiz question
   const [gameOver, setGameOver] = useState(false);
   const [totalPoints, setTotalPoints] = useState(0);
+  const [episodeId, setEpisodeId] = useState(null); //stores the db episode id of the searched for podcast
 
   const handleStatusClose = (event, reason) => {
-    if (reason === "clickaway") {
+    if (reason === 'clickaway') {
       return;
     }
 
@@ -81,61 +84,87 @@ function App() {
     setEpisodes(episodesList);
   };
 
+  const handleSetEpisodeId = (id) => {
+    console.log('setting episode id', id);
+    setEpisodeId(id);
+  };
+
   const handleFetchQuizQuestions = (e) => {
     //todo move to app
-    fetch("/api/getQuizQuestions", {
-      method: "GET",
+    fetch('/api/getQuizQuestions', {
+      method: 'GET',
     })
       .then((res) => {
         return res.json();
       })
       .then((data) => {
-        console.log("quizQuestions", data);
+        console.log('quizQuestions', data);
         handleSetQuizQuestions(data.quizQuestions);
       })
       .catch((err) => {
-        console.log("err", err);
+        console.log('err', err);
+      });
+  };
+
+  const getEpisodeId = () => {
+    console.log('get episode id from server', filePath);
+    fetch('/api/getEpisodeId', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ episodeUrl: filePath }),
+    })
+      .then((res) => {
+        return res.json();
+      })
+      .then((data) => {
+        console.log('episode id', data.episodeId);
+        setEpisodeId(data.episodeId);
+      })
+      .catch((err) => {
+        console.log('err', err);
       });
   };
 
   const handlePollForStatus = () => {
-    fetch("/api/getStatus", {
-      method: "GET",
+    fetch('/api/getStatus', {
+      method: 'GET',
     })
       .then((res) => {
         return res.json();
       })
       .then((data) => {
-        console.log("status data", data.status);
-        if (data.status === "ready") {
-          console.log("llm ready");
+        console.log('status data', data.status);
+        if (data.status === 'ready') {
+          console.log('llm ready');
 
           setLLMReady(true);
           setStatusMessage({
-            message: "LLM Ready!",
-            type: "info",
+            message: 'LLM Ready!',
+            type: 'info',
           });
         } else {
           handleSetStatusMessage({
             message: data.status,
-            type: "info",
+            type: 'info',
           });
           setTimeout(handlePollForStatus, 5000);
         }
       })
       .catch((err) => {
-        console.log("err", err);
+        console.log('err', err);
       });
   };
 
   const handleSetQueryResults = (queryResultsList) => {
     setQueryResults(queryResultsList);
-    if (mode === "quiz") {
+    if (mode === 'quiz') {
       if (quizQuestion < quizQuestions.length - 1) {
-        console.log("changing quiz question");
+        console.log('changing quiz question');
         setCurQuizQuestion(quizQuestion + 1);
       } else {
-        console.log("game over");
+        console.log('game over');
         //TODO:MH - show game over message
         setGameOver(true);
       }
@@ -174,13 +203,13 @@ function App() {
   };
 
   useEffect(() => {
-    if (statusMessage?.message === "Searching for answers...") {
+    if (statusMessage?.message === 'Searching for answers...') {
       setQueryResults([]);
     }
   }, [statusMessage]);
 
   useEffect(() => {
-    if (mode === "quiz" && quizQuestions.length === 0) {
+    if (mode === 'quiz' && quizQuestions.length === 0) {
       handleFetchQuizQuestions();
     }
   }, [mode]);
@@ -188,8 +217,8 @@ function App() {
   useEffect(() => {
     if (podcasts && podcasts.length > 0) {
       handleSetStatusMessage({
-        message: "Podcasts found",
-        type: "info",
+        message: 'Podcasts found',
+        type: 'info',
       });
     }
   }, [podcasts]);
@@ -198,14 +227,22 @@ function App() {
     //this is called when quizQuestions first set.
     //TODO: MH - Make sure it doesn't fire again
     if (quizQuestions && quizQuestions.length > 0) {
-      console.log("setting initial list of quiz questions");
+      console.log('setting initial list of quiz questions');
       setCurQuizQuestion(0);
     }
   }, [quizQuestions]);
 
+  useEffect(() => {
+    if (llmReady && !episodeId) {
+      getEpisodeId();
+    }
+  }, [llmReady]);
+
   const parseTimestampToSeconds = (timestamp) => {
     // Timestamp format: "hh:mm:ss,SSS"
-    const [hours, minutes, seconds] = timestamp.split(":").map(parseFloat);
+    const [hours, minutes, seconds] = timestamp
+      .split(':')
+      .map(parseFloat);
     return hours * 3600 + minutes * 60 + seconds;
   };
 
@@ -216,14 +253,16 @@ function App() {
     const firstTimestampMatch = queryResults.match(timestampRegex);
 
     // Extract the first timestamp or handle the case when no timestamp is found
-    const firstTimestamp = firstTimestampMatch ? firstTimestampMatch[0] : null;
+    const firstTimestamp = firstTimestampMatch
+      ? firstTimestampMatch[0]
+      : null;
     return firstTimestamp;
   };
 
   const audioRef = useRef(null);
 
   useEffect(() => {
-    if (mode === "audio" && queryResults.length > 0) {
+    if (mode === 'audio' && queryResults.length > 0) {
       //tell audio player to go to timestamp queryResults.timestamp
       const timeStampMatch = searchForTimestamp(queryResults);
       if (timeStampMatch) {
@@ -238,7 +277,7 @@ function App() {
       audioRef.current.currentTime = timeStamp;
       setStatusMessage({
         message: `Skipping to ${timeStamp} seconds`,
-        type: "info",
+        type: 'info',
       });
       audioRef.current.play();
     }
@@ -250,7 +289,7 @@ function App() {
       <main className="App">
         <Box
           sx={{
-            bgcolor: "background.paper",
+            bgcolor: 'background.paper',
             pt: 4,
             pb: 6,
           }}
@@ -262,7 +301,11 @@ function App() {
             />
             {!mode && <ModeSelector handleSetMode={handleSetMode} />}
             {mode && (
-              <Box align="center" className="formContainer" sx={{ mt: 8 }}>
+              <Box
+                align="center"
+                className="formContainer"
+                sx={{ mt: 8 }}
+              >
                 {llmReady ? (
                   <Box sx={{ mt: 8 }}>
                     <Typography
@@ -273,12 +316,12 @@ function App() {
                       gutterBottom
                       sx={{ mb: 2 }}
                     >
-                      Step 2:{" "}
-                      {mode === "quiz" && quizQuestion
-                        ? "Answer Questions"
-                        : mode === "audio"
-                        ? "Jump to the good parts"
-                        : "Get answers"}
+                      Step 2:{' '}
+                      {mode === 'quiz' && quizQuestion
+                        ? 'Answer Questions'
+                        : mode === 'audio'
+                        ? 'Jump to the good parts'
+                        : 'Get answers'}
                     </Typography>
                     {queryResults && queryResults.length > 0 && (
                       <QueryResults
@@ -302,12 +345,15 @@ function App() {
                       <QueryForm
                         llmReady={llmReady}
                         handleSetQueryResults={handleSetQueryResults}
-                        handleSetStatusMessage={handleSetStatusMessage}
+                        handleSetStatusMessage={
+                          handleSetStatusMessage
+                        }
                         handleSetTotalPoints={handleSetTotalPoints}
                         quizQuestion={quizQuestion}
                         quizQuestions={quizQuestions}
                         mode={mode}
                         gameOver={gameOver}
+                        episodeId={episodeId}
                       />
                     )}
                   </Box>
@@ -331,17 +377,24 @@ function App() {
                       <PodcastResults
                         podcasts={podcasts}
                         handleSetEpisodes={handleSetEpisodes}
-                        handleSetStatusMessage={handleSetStatusMessage}
+                        handleSetStatusMessage={
+                          handleSetStatusMessage
+                        }
                       />
                     )}
                     {episodes.length > 0 && (
                       <EpisodeResults
                         episodes={episodes}
+                        handleSetEpisodeId={handleSetEpisodeId}
                         mode={mode}
                         handleSetLLMReady={handleSetLLMReady}
-                        handleSetStatusMessage={handleSetStatusMessage}
+                        handleSetStatusMessage={
+                          handleSetStatusMessage
+                        }
                         handleSetFilePath={handleSetFilePath}
-                        handleSetQuizQuestions={handleSetQuizQuestions}
+                        handleSetQuizQuestions={
+                          handleSetQuizQuestions
+                        }
                         handlePollForStatus={handlePollForStatus}
                       />
                     )}
@@ -351,13 +404,22 @@ function App() {
             )}
           </Container>
         </Box>
-        {mode === "audio" && llmReady && filePath && (
+        {mode === 'audio' && llmReady && filePath && (
           <Container maxWidth="md">
             <Box
               maxWidth="md"
-              sx={{ display: "flex", mb: 4, justifyContent: "center" }}
+              sx={{
+                display: 'flex',
+                mb: 4,
+                justifyContent: 'center',
+              }}
             >
-              <audio ref={audioRef} id="audioPlayer" controls src={filePath}>
+              <audio
+                ref={audioRef}
+                id="audioPlayer"
+                controls
+                src={filePath}
+              >
                 Your browser does not support the audio element.
               </audio>
             </Box>
@@ -371,12 +433,15 @@ function App() {
             open={true}
             // autoHideDuration={6000}
             onClose={handleStatusClose}
-            anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+            anchorOrigin={{
+              vertical: 'bottom',
+              horizontal: 'center',
+            }}
           >
             <Alert
               variant="outlined"
               severity={statusMessage.type}
-              sx={{ bgcolor: "background.paper" }}
+              sx={{ bgcolor: 'background.paper' }}
               // onClose={handleStatusClose}
             >
               {statusMessage.message}
