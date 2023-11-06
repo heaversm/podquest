@@ -255,13 +255,14 @@ app.get('/playAudio', (req, res) => {
 });
 
 app.post('/api/performUserQuery', async (req, res) => {
-  const { query, mode, quizQuestion, episodeId } = req.body;
+  const { query, mode, quizQuestion, episodeId, userId } = req.body;
   console.log(
     'query,mode,question,episodeId',
     query,
     mode,
     quizQuestion,
-    episodeId
+    episodeId,
+    userId
   );
   let chainResponse;
 
@@ -338,6 +339,7 @@ app.post('/api/performUserQuery', async (req, res) => {
 
     //MH TODO: check if query exists for this podcast and return the cached result? Or generate new each time?
     const podcastQuery = new PodcastQueries({
+      userRef: userId ? userId : '',
       episodeRef: episodeId,
       query: query,
       queryResponse: queryResponse,

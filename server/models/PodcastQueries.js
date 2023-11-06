@@ -16,6 +16,11 @@ const PodcastQueries = new mongoose.Schema({
     required: false,
     default: '',
   },
+  userRef: {
+    type: String,
+    required: false,
+    default: '',
+  },
 });
 
 export default mongoose.model('PodcastQueries', PodcastQueries);

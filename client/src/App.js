@@ -398,6 +398,7 @@ function App() {
                         mode={mode}
                         gameOver={gameOver}
                         episodeId={episodeId}
+                        userId={userId}
                       />
                     )}
                   </Box>
