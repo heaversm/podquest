@@ -23,6 +23,11 @@ import { createTheme, ThemeProvider } from '@mui/material/styles';
 import { deepPurple, amber, blueGrey } from '@mui/material/colors';
 // import "./App.css";
 
+import {
+  useEventListener,
+  useLocalStorage,
+} from '@uidotdev/usehooks';
+
 import { PodcastForm } from './components/PodcastSelector/PodcastForm';
 import { PodcastResults } from './components/PodcastSelector/PodcastResults';
 import { EpisodeResults } from './components/PodcastSelector/EpisodeResults';
@@ -66,6 +71,7 @@ function App() {
   const [gameOver, setGameOver] = useState(false);
   const [totalPoints, setTotalPoints] = useState(0);
   const [episodeId, setEpisodeId] = useState(null); //stores the db episode id of the searched for podcast
+  const [userId, setUserId] = useLocalStorage('podquestId', null);
 
   const handleStatusClose = (event, reason) => {
     if (reason === 'clickaway') {
@@ -202,6 +208,32 @@ function App() {
     setTotalPoints(points);
   };
 
+  const checkForUserId = async () => {
+    return new Promise((resolve, reject) => {
+      if (userId) {
+        //we already have the user id in app state
+        resolve(userId);
+      } else {
+        fetch('/api/getUserId', {
+          method: 'GET',
+        })
+          .then((res) => {
+            return res.json();
+          })
+          .then((data) => {
+            if (data.id) {
+              console.log('user id set:', data.id);
+              setUserId(data.id);
+              resolve(data.id);
+            }
+          })
+          .catch((err) => {
+            reject(`Error getting user id: ${err}`);
+          });
+      }
+    });
+  };
+
   useEffect(() => {
     if (statusMessage?.message === 'Searching for answers...') {
       setQueryResults([]);
@@ -283,6 +315,18 @@ function App() {
     }
   }, [timeStamp]);
 
+  useEffect(() => {
+    const handleLoad = async () => {
+      console.log('loaded');
+      const userId = await checkForUserId();
+      console.log('userId', userId);
+    };
+    window.addEventListener('load', handleLoad);
+    return () => {
+      window.removeEventListener('load', handleLoad);
+    };
+  }, []);
+
   return (
     <ThemeProvider theme={myTheme}>
       <CssBaseline />
@@ -354,6 +398,7 @@ function App() {
                         mode={mode}
                         gameOver={gameOver}
                         episodeId={episodeId}
+                        userId={userId}
                       />
                     )}
                   </Box>

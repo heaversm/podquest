@@ -37,6 +37,7 @@ import connectDB from './db.js';
 import { nanoid } from 'nanoid';
 import PodcastEpisode from './models/PodcastEpisode.js';
 import PodcastQueries from './models/PodcastQueries.js';
+import PodcastUsers from './models/PodcastUsers.js';
 
 const statAsync = util.promisify(fs.stat); //get file sizes asynchronously to determine if above API limits
 
@@ -254,13 +255,14 @@ app.get('/playAudio', (req, res) => {
 });
 
 app.post('/api/performUserQuery', async (req, res) => {
-  const { query, mode, quizQuestion, episodeId } = req.body;
+  const { query, mode, quizQuestion, episodeId, userId } = req.body;
   console.log(
     'query,mode,question,episodeId',
     query,
     mode,
     quizQuestion,
-    episodeId
+    episodeId,
+    userId
   );
   let chainResponse;
 
@@ -337,6 +339,7 @@ app.post('/api/performUserQuery', async (req, res) => {
 
     //MH TODO: check if query exists for this podcast and return the cached result? Or generate new each time?
     const podcastQuery = new PodcastQueries({
+      userRef: userId ? userId : '',
       episodeRef: episodeId,
       query: query,
       queryResponse: queryResponse,
@@ -597,6 +600,17 @@ function adjustTranscript(originalTranscript) {
   // console.log(formattedTranscript);
   return formattedTranscript;
 }
+
+app.get('/api/getUserId', async (req, res) => {
+  // console.log("return transcript", transcription);
+  const id = nanoid();
+  //TODO: save user to db
+  const userEntry = new PodcastUsers({
+    userId: id,
+  });
+  await userEntry.save();
+  res.json({ id: id });
+});
 
 app.get('/api/downloadTranscript', async (req, res) => {
   // console.log("return transcript", transcription);

@@ -14,6 +14,7 @@ export function QueryForm({
   mode,
   gameOver,
   episodeId,
+  userId,
 }) {
   const [query, setQuery] = React.useState('');
   const [totalPoints, setTotalPoints] = useState(0); //current quiz question
@@ -39,6 +40,7 @@ export function QueryForm({
         mode,
         quizQuestion: quizText,
         episodeId: episodeId,
+        userId: userId ? userId : null,
       }),
     })
       .then((res) => res.json())
