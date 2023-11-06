@@ -37,6 +37,7 @@ import connectDB from './db.js';
 import { nanoid } from 'nanoid';
 import PodcastEpisode from './models/PodcastEpisode.js';
 import PodcastQueries from './models/PodcastQueries.js';
+import PodcastUsers from './models/PodcastUsers.js';
 
 const statAsync = util.promisify(fs.stat); //get file sizes asynchronously to determine if above API limits
 
@@ -597,6 +598,17 @@ function adjustTranscript(originalTranscript) {
   // console.log(formattedTranscript);
   return formattedTranscript;
 }
+
+app.get('/api/getUserId', async (req, res) => {
+  // console.log("return transcript", transcription);
+  const id = nanoid();
+  //TODO: save user to db
+  const userEntry = new PodcastUsers({
+    userId: id,
+  });
+  await userEntry.save();
+  res.json({ id: id });
+});
 
 app.get('/api/downloadTranscript', async (req, res) => {
   // console.log("return transcript", transcription);
