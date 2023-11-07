@@ -16,7 +16,6 @@ export function EpisodeResults({
   handleSetLLMReady,
   handleSetStatusMessage,
   handleSetFilePath,
-  handleSetQuizQuestions,
   handlePollForStatus,
   handleSetEpisodeId,
   mode,
@@ -101,7 +100,6 @@ export function EpisodeResults({
       })
       .then((data) => {
         console.log('transcribeData', data.message);
-        // handleSetQuizQuestions(data.quizQuestions);
         handlePollForStatus();
       })
       .catch((err) => {

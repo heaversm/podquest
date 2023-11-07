@@ -46,11 +46,6 @@ const LOAD_TRANSCRIPT_FROM_FILE = false; //MH TODO: currently loads text, but ll
 const LOAD_AUDIO_FROM_FILE = false;
 const MAX_EPISODES = 5;
 
-const GENERATE_QUIZ_QUESTIONS = true; //generate quiz questions from the transcript
-const NUM_QUIZ_QUESTIONS_TO_GENERATE = 5; //how many initial questions do you want the llm to come up with
-const NUM_QUIZ_QUESTIONS = 5; //how many of the generated quiz questions do you want to keep
-const USE_ONLY_SUMMARY = false; //ask questions only pertaining to the summary
-const RESPOND_YES_NO = false; //respond with only yes or no
 const BE_CONCISE = false; //be concise in your response
 const USE_ONLY_CONTEXT = false;
 const FORCE_SRT = true; //allows us to avoid refreshing the page and re-transcribe when true, but means other modes must navigate timestamps
@@ -72,7 +67,6 @@ let chain; //will hold the llm and retriever
 let summarizer; //will hold the summarization chain
 let transcription; //will hold the transcription from openai
 let transcripts = []; //will hold the transcripts from openai if the audio is split into chunks
-let quizQuestions; //will hold the quiz questions if this mode is selected
 let llmStatus = 'not ready'; //will hold the status of the llm
 
 //llm
@@ -221,15 +215,6 @@ const getAudioFromURL = async (url) => {
   });
 };
 
-app.get('/api/getQuizQuestions', async (req, res) => {
-  if (quizQuestions && quizQuestions.length > 0) {
-    console.log('quizQuestions', quizQuestions);
-    return res.status(200).json({ quizQuestions: quizQuestions });
-  } else {
-    return res.status(404).json({ error: 'No quiz questions found' });
-  }
-});
-
 app.get('/playAudio', (req, res) => {
   const filePath = req.body;
 
@@ -255,76 +240,17 @@ app.get('/playAudio', (req, res) => {
 });
 
 app.post('/api/performUserQuery', async (req, res) => {
-  const { query, mode, quizQuestion, episodeId, userId } = req.body;
+  const { query, mode, episodeId, userId } = req.body;
   console.log(
     'query,mode,question,episodeId',
     query,
     mode,
-    quizQuestion,
     episodeId,
     userId
   );
   let chainResponse;
 
-  if (mode === 'quiz') {
-    let isCorrect = null;
-
-    let finalQuery = `The user answered this question: ${quizQuestion}. The user's answer was: ${query}. Is this correct?"`;
-
-    if (USE_ONLY_CONTEXT) {
-      finalQuery += `Use only the context of the question and answer to determine if the user is correct.`;
-    }
-
-    if (RESPOND_YES_NO) {
-      finalQuery += `Respond with only "yes" or "no"`;
-    } else if (BE_CONCISE) {
-      finalQuery += 'Be concise in your response.';
-    }
-
-    chainResponse = await chain.call({
-      query: finalQuery,
-    });
-
-    const chainResponseText = chainResponse.text
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-zA-Z ]/g, '');
-    console.log('chainResponseText', chainResponseText);
-
-    let yesIndex, noIndex;
-    //look for word yes in chain response text and parse it out...
-    yesIndex = chainResponseText.indexOf('yes');
-    if (yesIndex === -1) {
-      noIndex = chainResponseText.indexOf('no');
-      if (noIndex === -1) {
-        //perform sentiment analysis to determine positivity / negativity
-        const sentimentResponse = await chain.call({
-          query: `Analyze the sentiment of the following text: ${chainResponse.text}. Respond with only "positive" or "negative"`,
-        });
-        //convert sentimentResponse.text to a lowercase string:
-        let sentimentResponseText = sentimentResponse.text.trim();
-        sentimentResponseText.replace(/[^a-zA-Z ]/g, '');
-        sentimentResponseText = sentimentResponseText.toLowerCase();
-
-        console.log('sentimentResponse', sentimentResponseText);
-
-        if (sentimentResponseText == 'positive') {
-          console.log('true');
-          isCorrect = true;
-        } else {
-          console.log('false');
-          isCorrect = false;
-        }
-      } else {
-        isCorrect = false;
-      }
-    } else {
-      isCorrect = true;
-    }
-    return res
-      .status(200)
-      .json({ text: chainResponse.text, isCorrect: isCorrect });
-  } else if (mode === 'audio') {
+  if (mode === 'audio') {
     let finalQuery = `The question is: ${query}. Respond with the timestamp from the podcast where the answer to the question can be found. The format should only be a valid timestamp of the format hh:mm:ss. If the answer to the question cannot be found in the podcast, respond with "Answer not found".`;
     chainResponse = await chain.call({
       query: finalQuery,
@@ -668,71 +594,9 @@ const initiateLLM = async (transcription, mode) => {
   console.log('establishing llm');
   llmStatus = 'establishing llm';
   const output = await establishLLM(transcription, mode);
-  llmStatus = 'generating quiz';
-  console.log('llm established, generating quiz questions');
-
-  if (GENERATE_QUIZ_QUESTIONS) {
-    await generateQuizQuestions(output);
-  }
   console.log('all done');
   llmStatus = 'ready';
   return 'ready';
-};
-
-const generateQuizQuestions = async (output) => {
-  return new Promise(async (resolve, reject) => {
-    // let query = `You are a college teacher, asking college students questions about the stories mentioned in the podcast whose answers summarize the key topics. Be creative. Generate 5 quiz questions. Do not include mention of any line numbers or timestamps in your questions.`;
-
-    let query = `Generate 5 quiz questions about the topics discussed in the episode. Do not include mention of any line numbers or timestamps in your questions.`;
-
-    if (USE_ONLY_SUMMARY) {
-      //MH - currently fails because output is not returned from establishLLM
-      summarizer = loadSummarizationChain(llm, {
-        type: 'map_reduce',
-      }); //stuff, map_reduce, refine
-      const summary = await summarizer.call({
-        input_documents: output,
-      });
-      console.log('summary', summary);
-
-      query += ` Use only this summary to generate the questions: ${summary}`;
-    }
-
-    const quizQuestionsResponse = await chain.call({
-      query: query,
-    });
-    console.log(
-      'all quiz questions generated',
-      quizQuestionsResponse.text
-    );
-
-    if (quizQuestionsResponse?.text) {
-      const inputText = quizQuestionsResponse.text;
-      const lines = inputText.split('\n');
-      if (lines.length > 0) {
-        const questions = lines
-          .map((line) => line.trim()) // Remove leading/trailing whitespace
-          .filter((line) => line.length > 0) // Filter out empty lines
-          .filter((line) => /^\d+\.\s/.test(line)) // Filter lines that start with a number and a period
-          .map((line) => line.replace(/^\d+\.\s/, '')); // Remove the numbering
-        if (questions.length > 0) {
-          if (NUM_QUIZ_QUESTIONS_TO_GENERATE !== NUM_QUIZ_QUESTIONS) {
-            const sliceIndex =
-              NUM_QUIZ_QUESTIONS_TO_GENERATE - NUM_QUIZ_QUESTIONS;
-            //keep only the questions from the sliceIndex to the end of the array
-            quizQuestions = questions.slice(
-              sliceIndex,
-              questions.length - 1
-            );
-          } else {
-            quizQuestions = questions;
-          }
-          resolve(true);
-          // console.log("final quiz questions", quizQuestions);
-        }
-      }
-    }
-  });
 };
 
 async function transcribeEpisode(episodeUrl, mode, episodeTitle) {
