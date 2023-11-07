@@ -29,12 +29,15 @@ import { mkdir, writeFile } from 'fs/promises';
 import { Readable } from 'stream';
 import { finished } from 'stream/promises';
 
-import ffmpeg from 'fluent-ffmpeg';
+import ffmpeg from 'fluent-ffmpeg'; //for splitting audio
 import getMP3Duration from 'get-mp3-duration';
 import util from 'util';
 
-import connectDB from './db.js';
-import { nanoid } from 'nanoid';
+import connectDB from './db.js'; //mongodb connection
+import { nanoid } from 'nanoid'; //random id generation
+
+import { Queue, Worker } from 'bullmq';
+
 import PodcastEpisode from './models/PodcastEpisode.js';
 import PodcastQueries from './models/PodcastQueries.js';
 import PodcastUsers from './models/PodcastUsers.js';
@@ -68,6 +71,11 @@ const configuration = new Configuration({
 const openai = new OpenAIApi(configuration);
 
 const llm = new OpenAI(); //the llm model to use (currently only openai)
+
+//QUEUE
+const REDIS_URL = process.env.REDIS_URL;
+const llmQueue = new Queue('llm', REDIS_URL);
+
 let chain; //will hold the llm and retriever
 let summarizer; //will hold the summarization chain
 let transcription; //will hold the transcription from openai
@@ -736,91 +744,94 @@ const generateQuizQuestions = async (output) => {
 };
 
 async function transcribeEpisode(episodeUrl, mode, episodeTitle) {
-  let filePath;
-  llmStatus = 'downloading audio';
-  if (LOAD_AUDIO_FROM_FILE) {
-    filePath = path.join(__dirname, '../audio.mp3');
-  } else {
-    try {
-      filePath = await getAudioFromURL(episodeUrl);
-    } catch (error) {
-      console.log('error getting audio file', error);
-      // return res.status(500).json({ error: error });
-    }
-  }
-
-  const generateTranscriptions = async () => {
-    llmStatus = 'getting file size';
-    const stats = await statAsync(filePath);
-
-    const fileSizeInMB = stats.size / 1024 / 1024;
-    console.log('fs in MB', fileSizeInMB, 'max', MAX_FILE_SIZE);
-    //TODO:MH - there are still instances where being under MAX_FILE_SIZE results in a BODY LENGTH EXCEEDED ERROR from Whisper
-
-    if (fileSizeInMB > MAX_FILE_SIZE) {
-      console.log('file size too large, splitting audio');
-      llmStatus = 'splitting audio';
-      try {
-        const outputPaths = await splitAudioIntoChunks(filePath);
-
-        llmStatus = 'transcribing chunks';
-        console.log('transcribing chunks');
-
-        await transcribeAudioChunks(outputPaths, mode).then(
-          (chunkedTranscripts) => {
-            transcription = chunkedTranscripts.join(''); // Combine all chunk transcripts
-
-            //TODO: need to adjust transcript timestamps to account for chunking
-            llmStatus = 'reassembling audio';
-            const adjustedTranscript =
-              adjustTranscript(transcription);
-            transcription = adjustedTranscript;
-            // console.log('final transcription', transcription);
-            llmStatus = 'audio transcribed';
-            //remove chunked audio
-            outputPaths.forEach((outputPath) => {
-              removeFile(outputPath);
-            });
-            //remove original audio
-            removeFile(filePath);
-          }
-        );
-      } catch (error) {
-        console.log('error splitting audio', error);
-      }
+  return new Promise(async (resolve, reject) => {
+    let filePath;
+    llmStatus = 'downloading audio';
+    if (LOAD_AUDIO_FROM_FILE) {
+      filePath = path.join(__dirname, '../audio.mp3');
     } else {
-      console.log('file size ok');
       try {
-        console.log('transcribing audio');
-        llmStatus = 'transcribing audio';
-        transcription = await transcribeAudio(filePath, mode);
-        // console.log('transcription',transcription);
+        filePath = await getAudioFromURL(episodeUrl);
       } catch (error) {
-        console.log('error transcribing audio', error);
-        return error;
+        console.log('error getting audio file', error);
+        // return res.status(500).json({ error: error });
       }
     }
 
-    const episodeId = nanoid();
-    const episodeEntry = new PodcastEpisode({
-      episodeId: episodeId,
-      episodeUrl: episodeUrl,
-      episodeTitle: episodeTitle,
-      episodeTranscript: transcription,
-    });
+    const generateTranscriptions = async () => {
+      llmStatus = 'getting file size';
+      const stats = await statAsync(filePath);
 
-    await episodeEntry.save();
+      const fileSizeInMB = stats.size / 1024 / 1024;
+      console.log('fs in MB', fileSizeInMB, 'max', MAX_FILE_SIZE);
+      //TODO:MH - there are still instances where being under MAX_FILE_SIZE results in a BODY LENGTH EXCEEDED ERROR from Whisper
 
-    const removeResult = removeFile(filePath);
-    if (removeResult.status === 'error') {
-      console.error(removeResult.error);
-      return removeResult.error;
-    }
+      if (fileSizeInMB > MAX_FILE_SIZE) {
+        console.log('file size too large, splitting audio');
+        llmStatus = 'splitting audio';
+        try {
+          const outputPaths = await splitAudioIntoChunks(filePath);
 
-    initiateLLM(transcription, mode);
-  }; //end generateTranscriptions
+          llmStatus = 'transcribing chunks';
+          console.log('transcribing chunks');
 
-  await generateTranscriptions();
+          await transcribeAudioChunks(outputPaths, mode).then(
+            (chunkedTranscripts) => {
+              transcription = chunkedTranscripts.join(''); // Combine all chunk transcripts
+
+              //TODO: need to adjust transcript timestamps to account for chunking
+              llmStatus = 'reassembling audio';
+              const adjustedTranscript =
+                adjustTranscript(transcription);
+              transcription = adjustedTranscript;
+              // console.log('final transcription', transcription);
+              llmStatus = 'audio transcribed';
+              //remove chunked audio
+              outputPaths.forEach((outputPath) => {
+                removeFile(outputPath);
+              });
+              //remove original audio
+              removeFile(filePath);
+            }
+          );
+        } catch (error) {
+          console.log('error splitting audio', error);
+        }
+      } else {
+        console.log('file size ok');
+        try {
+          console.log('transcribing audio');
+          llmStatus = 'transcribing audio';
+          transcription = await transcribeAudio(filePath, mode);
+          // console.log('transcription',transcription);
+        } catch (error) {
+          console.log('error transcribing audio', error);
+          return error;
+        }
+      }
+
+      const episodeId = nanoid();
+      const episodeEntry = new PodcastEpisode({
+        episodeId: episodeId,
+        episodeUrl: episodeUrl,
+        episodeTitle: episodeTitle,
+        episodeTranscript: transcription,
+      });
+
+      await episodeEntry.save();
+
+      const removeResult = removeFile(filePath);
+      if (removeResult.status === 'error') {
+        console.error(removeResult.error);
+        return removeResult.error;
+      }
+
+      initiateLLM(transcription, mode);
+    }; //end generateTranscriptions
+
+    await generateTranscriptions();
+    resolve();
+  });
 }
 
 app.post('/api/searchForTranscript', async (req, res) => {
@@ -860,9 +871,30 @@ app.post('/api/searchForTranscript', async (req, res) => {
   }
 });
 
+const llmWorker = new Worker('llm', async (job) => {
+  console.log('job', job);
+  const { episodeUrl, episodeTitle, userId, mode } = job.data;
+  await transcribeEpisode(episodeUrl, mode, episodeTitle);
+  console.log('episode transcribed');
+  job.moveToCompleted();
+});
+
+llmWorker.on('completed', (job) => {
+  console.log(`${job.id} has completed!`);
+});
+
+llmWorker.on('failed', (job, err) => {
+  console.log(`${job.id} has failed with ${err.message}`);
+});
+
 app.post('/api/transcribeEpisode', async (req, res) => {
-  const { episodeUrl, mode, episodeTitle } = req.body;
-  transcribeEpisode(episodeUrl, mode, episodeTitle);
+  const { episodeUrl, mode, episodeTitle, userId } = req.body;
+  llmQueue.add('transcribe', {
+    episodeUrl,
+    episodeTitle,
+    userId,
+    mode,
+  });
   llmStatus = 'initializing';
   res.status(202).json({ message: 'Transcription in progress' });
 });
