@@ -8,21 +8,11 @@ export function QueryForm({
   llmReady,
   handleSetQueryResults,
   handleSetStatusMessage,
-  handleSetTotalPoints,
-  quizQuestion,
-  quizQuestions,
   mode,
-  gameOver,
   episodeId,
   userId,
 }) {
   const [query, setQuery] = React.useState('');
-  const [totalPoints, setTotalPoints] = useState(0); //current quiz question
-  const [quizText, setQuizText] = useState('');
-
-  useEffect(() => {
-    handleSetTotalPoints(totalPoints);
-  }, [totalPoints]);
 
   const handleQuerySearch = (e) => {
     e.preventDefault();
@@ -38,42 +28,18 @@ export function QueryForm({
       body: JSON.stringify({
         query,
         mode,
-        quizQuestion: quizText,
         episodeId: episodeId,
         userId: userId ? userId : null,
       }),
     })
       .then((res) => res.json())
       .then((data) => {
-        if (mode === 'quiz') {
-          // console.log("isCorrect?", data.isCorrect ? "true" : "false");
-          setQuery('');
-          if (data.isCorrect) {
-            let curPoints = totalPoints;
-            setTotalPoints((curPoints += 1));
-            handleSetStatusMessage({
-              message: data.isCorrect ? 'Correct!' : 'Incorrect!',
-              type: data.isCorrect ? 'success' : 'error',
-            });
-          }
-        } else {
-          handleSetStatusMessage(null);
-        }
+        handleSetStatusMessage(null);
         handleSetQueryResults(data.text);
       })
       .catch((err) => {
         console.log('err', err);
       });
-  };
-
-  useEffect(() => {
-    setQuizText(quizQuestionText);
-  }, [quizQuestion]);
-
-  const quizQuestionText = () => {
-    if (quizQuestion !== null) {
-      return quizQuestions[quizQuestion];
-    }
   };
 
   return (
@@ -84,18 +50,6 @@ export function QueryForm({
         autoComplete="off"
         onSubmit={handleQuerySearch}
       >
-        {quizQuestion !== null && mode === 'quiz' && (
-          <Typography
-            component="h5"
-            variant="h6"
-            align="left"
-            color="primary.main"
-            gutterBottom
-            sx={{ mb: 2 }}
-          >
-            {quizText}
-          </Typography>
-        )}
         <TextField
           type="text"
           label="Input"
@@ -121,9 +75,6 @@ export function QueryForm({
         >
           Submit
         </Button>
-        {mode === 'quiz' && totalPoints !== null && (
-          <Typography>Points: {totalPoints}</Typography>
-        )}
       </Box>
     </div>
   );

@@ -63,13 +63,9 @@ function App() {
   const [queryResults, setQueryResults] = useState([]);
   const [llmReady, setLLMReady] = useState(false);
   const [statusMessage, setStatusMessage] = useState(); //e.g message: "Waiting for user input...", type: "info","open: true"
-  const [mode, setMode] = useState(null); //qa, audio, or quiz
+  const [mode, setMode] = useState(null); //qa or audio
   const [filePath, setFilePath] = useState(null); //path to audio file on server
   const [timeStamp, setTimestamp] = useState(null); //timestamp of audio file
-  const [quizQuestions, setQuizQuestions] = useState([]);
-  const [quizQuestion, setCurQuizQuestion] = useState(null); //current quiz question
-  const [gameOver, setGameOver] = useState(false);
-  const [totalPoints, setTotalPoints] = useState(0);
   const [episodeId, setEpisodeId] = useState(null); //stores the db episode id of the searched for podcast
   const [userId, setUserId] = useLocalStorage('podquestId', null);
 
@@ -93,23 +89,6 @@ function App() {
   const handleSetEpisodeId = (id) => {
     console.log('setting episode id', id);
     setEpisodeId(id);
-  };
-
-  const handleFetchQuizQuestions = (e) => {
-    //todo move to app
-    fetch('/api/getQuizQuestions', {
-      method: 'GET',
-    })
-      .then((res) => {
-        return res.json();
-      })
-      .then((data) => {
-        console.log('quizQuestions', data);
-        handleSetQuizQuestions(data.quizQuestions);
-      })
-      .catch((err) => {
-        console.log('err', err);
-      });
   };
 
   const getEpisodeId = () => {
@@ -165,16 +144,6 @@ function App() {
 
   const handleSetQueryResults = (queryResultsList) => {
     setQueryResults(queryResultsList);
-    if (mode === 'quiz') {
-      if (quizQuestion < quizQuestions.length - 1) {
-        console.log('changing quiz question');
-        setCurQuizQuestion(quizQuestion + 1);
-      } else {
-        console.log('game over');
-        //TODO:MH - show game over message
-        setGameOver(true);
-      }
-    }
   };
 
   const handleSetLLMReady = (llmReady) => {
@@ -189,7 +158,6 @@ function App() {
     if (mode === null) {
       setMode(null);
       setStatusMessage(null);
-      setGameOver(false);
       setQueryResults([]);
     } else {
       setMode(`${mode}`);
@@ -198,14 +166,6 @@ function App() {
 
   const handleSetFilePath = (path) => {
     setFilePath(path);
-  };
-
-  const handleSetQuizQuestions = (questions) => {
-    setQuizQuestions(questions);
-  };
-
-  const handleSetTotalPoints = (points) => {
-    setTotalPoints(points);
   };
 
   const checkForUserId = async () => {
@@ -241,12 +201,6 @@ function App() {
   }, [statusMessage]);
 
   useEffect(() => {
-    if (mode === 'quiz' && quizQuestions.length === 0) {
-      handleFetchQuizQuestions();
-    }
-  }, [mode]);
-
-  useEffect(() => {
     if (podcasts && podcasts.length > 0) {
       handleSetStatusMessage({
         message: 'Podcasts found',
@@ -254,15 +208,6 @@ function App() {
       });
     }
   }, [podcasts]);
-
-  useEffect(() => {
-    //this is called when quizQuestions first set.
-    //TODO: MH - Make sure it doesn't fire again
-    if (quizQuestions && quizQuestions.length > 0) {
-      console.log('setting initial list of quiz questions');
-      setCurQuizQuestion(0);
-    }
-  }, [quizQuestions]);
 
   useEffect(() => {
     if (llmReady && !episodeId) {
@@ -361,46 +306,22 @@ function App() {
                       sx={{ mb: 2 }}
                     >
                       Step 2:{' '}
-                      {mode === 'quiz' && quizQuestion
-                        ? 'Answer Questions'
-                        : mode === 'audio'
+                      {mode === 'audio'
                         ? 'Jump to the good parts'
                         : 'Get answers'}
                     </Typography>
                     {queryResults && queryResults.length > 0 && (
-                      <QueryResults
-                        queryResults={queryResults}
-                        gameOver={gameOver}
-                      />
+                      <QueryResults queryResults={queryResults} />
                     )}
 
-                    {gameOver ? (
-                      <Typography
-                        component="h4"
-                        variant="h5"
-                        align="center"
-                        color="primary.main"
-                        gutterBottom
-                        sx={{ mb: 2 }}
-                      >
-                        Game Over! You scored {totalPoints} points.
-                      </Typography>
-                    ) : (
-                      <QueryForm
-                        llmReady={llmReady}
-                        handleSetQueryResults={handleSetQueryResults}
-                        handleSetStatusMessage={
-                          handleSetStatusMessage
-                        }
-                        handleSetTotalPoints={handleSetTotalPoints}
-                        quizQuestion={quizQuestion}
-                        quizQuestions={quizQuestions}
-                        mode={mode}
-                        gameOver={gameOver}
-                        episodeId={episodeId}
-                        userId={userId}
-                      />
-                    )}
+                    <QueryForm
+                      llmReady={llmReady}
+                      handleSetQueryResults={handleSetQueryResults}
+                      handleSetStatusMessage={handleSetStatusMessage}
+                      mode={mode}
+                      episodeId={episodeId}
+                      userId={userId}
+                    />
                   </Box>
                 ) : (
                   <>
@@ -437,9 +358,6 @@ function App() {
                           handleSetStatusMessage
                         }
                         handleSetFilePath={handleSetFilePath}
-                        handleSetQuizQuestions={
-                          handleSetQuizQuestions
-                        }
                         handlePollForStatus={handlePollForStatus}
                       />
                     )}
