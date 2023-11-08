@@ -91,6 +91,28 @@ function App() {
     setEpisodeId(id);
   };
 
+  const resetUserLLM = async () => {
+    return new Promise((resolve, reject) => {
+      fetch('/api/resetUserLLM', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ userId: userId }),
+      })
+        .then((res) => {
+          return res.json();
+        })
+        .then((data) => {
+          resolve(data.status);
+        })
+        .catch((err) => {
+          console.log('err', err);
+          reject(err);
+        });
+    });
+  };
+
   const getEpisodeId = () => {
     console.log('get episode id from server', filePath);
     fetch('/api/getEpisodeId', {
@@ -114,7 +136,11 @@ function App() {
 
   const handlePollForStatus = () => {
     fetch('/api/getStatus', {
-      method: 'GET',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ userId }),
     })
       .then((res) => {
         return res.json();
@@ -171,9 +197,12 @@ function App() {
   const checkForUserId = async () => {
     return new Promise((resolve, reject) => {
       if (userId) {
+        console.log('user id in app state', userId);
         //we already have the user id in app state
         resolve(userId);
       } else {
+        //we need to get the user id from the server
+        console.log('getting id from server');
         fetch('/api/getUserId', {
           method: 'GET',
         })
@@ -264,6 +293,11 @@ function App() {
     const handleLoad = async () => {
       console.log('loaded');
       const userId = await checkForUserId();
+      if (userId) {
+        console.log('user exists, resetting llm status', userId);
+        const userStatus = await resetUserLLM();
+        console.log('finished');
+      }
       console.log('userId', userId);
     };
     window.addEventListener('load', handleLoad);
@@ -359,6 +393,7 @@ function App() {
                         }
                         handleSetFilePath={handleSetFilePath}
                         handlePollForStatus={handlePollForStatus}
+                        userId={userId}
                       />
                     )}
                   </>
@@ -388,7 +423,7 @@ function App() {
             </Box>
           </Container>
         )}
-        <Footer llmReady={llmReady} />
+        <Footer llmReady={llmReady} userId={userId} />
         <Feedback />
         {statusMessage && (
           <Snackbar

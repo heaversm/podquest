@@ -1,11 +1,17 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef } from 'react';
 
-import { Link, Button, Typography, Container, Box } from "@mui/material";
+import {
+  Link,
+  Button,
+  Typography,
+  Container,
+  Box,
+} from '@mui/material';
 
-import { deepPurple, amber, blueGrey } from "@mui/material/colors";
+import { deepPurple, amber, blueGrey } from '@mui/material/colors';
 const colorSubtext = blueGrey[400];
 
-export function Footer({ llmReady }) {
+export function Footer({ llmReady, userId }) {
   const [blobUrl, setBlobUrl] = React.useState(null);
   const transcriptLink = useRef();
 
@@ -25,37 +31,55 @@ export function Footer({ llmReady }) {
     //   message: "Downloading transcript...",
     //   type: "info",
     // });
-    fetch("/api/downloadTranscript", {
-      method: "GET",
+    fetch('/api/downloadTranscript', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        userId,
+      }),
     })
       .then((res) => res.json())
       .then((data) => {
+        console.log(
+          'transcription data?',
+          data.transcription ? 'yes' : 'no'
+        );
         //MH TODO: make react-y
         // console.log("data", data);
         const file = new Blob([data.transcription], {
-          type: "text/plain;charset=utf-8",
+          type: 'text/plain;charset=utf-8',
         });
         const blobjectUrl = window.URL.createObjectURL(file);
         setBlobUrl(blobjectUrl);
       })
       .catch((err) => {
-        console.log("err", err);
+        console.log('err', err);
       });
   };
 
   const disclaimer =
-    "NOTE: Downloading, transcribing, and training an LLM on your search CAN TAKE SEVERAL MINUTES. Relax. Pet your dog. Grab a snack!";
+    'NOTE: Downloading, transcribing, and training an LLM on your search CAN TAKE SEVERAL MINUTES. Relax. Pet your dog. Grab a snack!';
 
   return (
     <Container maxWidth="sm">
       {llmReady ? (
         <Box justifyContent="center" display="flex">
           {blobUrl ? (
-            <Link download="transcript.srt" href={blobUrl} ref={transcriptLink}>
+            <Link
+              download="transcript.srt"
+              href={blobUrl}
+              ref={transcriptLink}
+            >
               Downloading...
             </Link>
           ) : (
-            <Button align="center" display="block" onClick={downloadTranscript}>
+            <Button
+              align="center"
+              display="block"
+              onClick={downloadTranscript}
+            >
               Download transcript
             </Button>
           )}
