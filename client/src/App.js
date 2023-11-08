@@ -194,32 +194,26 @@ function App() {
     setFilePath(path);
   };
 
-  const checkForUserId = async () => {
+  const assignNewUserId = async () => {
     return new Promise((resolve, reject) => {
-      if (userId) {
-        console.log('user id in app state', userId);
-        //we already have the user id in app state
-        resolve(userId);
-      } else {
-        //we need to get the user id from the server
-        console.log('getting id from server');
-        fetch('/api/getUserId', {
-          method: 'GET',
+      //we need to get the user id from the server
+      console.log('getting new user id from server');
+      fetch('/api/getUserId', {
+        method: 'GET',
+      })
+        .then((res) => {
+          return res.json();
         })
-          .then((res) => {
-            return res.json();
-          })
-          .then((data) => {
-            if (data.id) {
-              console.log('user id set:', data.id);
-              setUserId(data.id);
-              resolve(data.id);
-            }
-          })
-          .catch((err) => {
-            reject(`Error getting user id: ${err}`);
-          });
-      }
+        .then((data) => {
+          if (data.id) {
+            console.log('user id set:', data.id);
+            setUserId(data.id);
+            resolve(data.id);
+          }
+        })
+        .catch((err) => {
+          reject(`Error getting user id: ${err}`);
+        });
     });
   };
 
@@ -292,13 +286,14 @@ function App() {
   useEffect(() => {
     const handleLoad = async () => {
       console.log('loaded');
-      const userId = await checkForUserId();
       if (userId) {
         console.log('user exists, resetting llm status', userId);
         const userStatus = await resetUserLLM();
-        console.log('finished');
+      } else {
+        console.log('user does not exist');
+        const assignedId = await assignNewUserId();
+        console.log('assignedId', assignedId);
       }
-      console.log('userId', userId);
     };
     window.addEventListener('load', handleLoad);
     return () => {

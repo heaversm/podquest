@@ -781,6 +781,12 @@ app.post('/api/searchForTranscript', async (req, res) => {
           llmStatus: 'establishing LLM',
         });
         userLLMS.push(userLLM);
+      } else {
+        console.log('userLLM found', userLLM);
+        if (!userLLM.transcription) {
+          userLLM.transcription = podcastEpisode.episodeTranscript;
+          userLLM.llmStatus = 'establishing LLM';
+        }
       }
 
       await initiateLLM(mode, userLLM);
