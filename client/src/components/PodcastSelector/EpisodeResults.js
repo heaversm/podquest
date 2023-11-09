@@ -19,6 +19,7 @@ export function EpisodeResults({
   handlePollForStatus,
   handleSetEpisodeId,
   mode,
+  userId,
 }) {
   const [episode, setEpisode] = React.useState('');
 
@@ -40,7 +41,7 @@ export function EpisodeResults({
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ episodeUrl }),
+        body: JSON.stringify({ episodeUrl, userId }),
       })
         .then((res) => {
           return res.json();
@@ -93,7 +94,12 @@ export function EpisodeResults({
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ episodeUrl, mode, episodeTitle }),
+      body: JSON.stringify({
+        episodeUrl,
+        mode,
+        episodeTitle,
+        userId,
+      }),
     })
       .then((res) => {
         return res.json();

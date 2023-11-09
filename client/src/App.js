@@ -91,6 +91,28 @@ function App() {
     setEpisodeId(id);
   };
 
+  const resetUserLLM = async () => {
+    return new Promise((resolve, reject) => {
+      fetch('/api/resetUserLLM', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ userId: userId }),
+      })
+        .then((res) => {
+          return res.json();
+        })
+        .then((data) => {
+          resolve(data.status);
+        })
+        .catch((err) => {
+          console.log('err', err);
+          reject(err);
+        });
+    });
+  };
+
   const getEpisodeId = () => {
     console.log('get episode id from server', filePath);
     fetch('/api/getEpisodeId', {
@@ -114,7 +136,11 @@ function App() {
 
   const handlePollForStatus = () => {
     fetch('/api/getStatus', {
-      method: 'GET',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ userId }),
     })
       .then((res) => {
         return res.json();
@@ -168,29 +194,26 @@ function App() {
     setFilePath(path);
   };
 
-  const checkForUserId = async () => {
+  const assignNewUserId = async () => {
     return new Promise((resolve, reject) => {
-      if (userId) {
-        //we already have the user id in app state
-        resolve(userId);
-      } else {
-        fetch('/api/getUserId', {
-          method: 'GET',
+      //we need to get the user id from the server
+      console.log('getting new user id from server');
+      fetch('/api/getUserId', {
+        method: 'GET',
+      })
+        .then((res) => {
+          return res.json();
         })
-          .then((res) => {
-            return res.json();
-          })
-          .then((data) => {
-            if (data.id) {
-              console.log('user id set:', data.id);
-              setUserId(data.id);
-              resolve(data.id);
-            }
-          })
-          .catch((err) => {
-            reject(`Error getting user id: ${err}`);
-          });
-      }
+        .then((data) => {
+          if (data.id) {
+            console.log('user id set:', data.id);
+            setUserId(data.id);
+            resolve(data.id);
+          }
+        })
+        .catch((err) => {
+          reject(`Error getting user id: ${err}`);
+        });
     });
   };
 
@@ -263,8 +286,14 @@ function App() {
   useEffect(() => {
     const handleLoad = async () => {
       console.log('loaded');
-      const userId = await checkForUserId();
-      console.log('userId', userId);
+      if (userId) {
+        console.log('user exists, resetting llm status', userId);
+        const userStatus = await resetUserLLM();
+      } else {
+        console.log('user does not exist');
+        const assignedId = await assignNewUserId();
+        console.log('assignedId', assignedId);
+      }
     };
     window.addEventListener('load', handleLoad);
     return () => {
@@ -359,6 +388,7 @@ function App() {
                         }
                         handleSetFilePath={handleSetFilePath}
                         handlePollForStatus={handlePollForStatus}
+                        userId={userId}
                       />
                     )}
                   </>
@@ -388,7 +418,7 @@ function App() {
             </Box>
           </Container>
         )}
-        <Footer llmReady={llmReady} />
+        <Footer llmReady={llmReady} userId={userId} />
         <Feedback />
         {statusMessage && (
           <Snackbar
