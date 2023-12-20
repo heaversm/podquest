@@ -79,6 +79,7 @@ export function Footer({ llmReady, userId }) {
               align="center"
               display="block"
               onClick={downloadTranscript}
+              className="download-transcript-button"
             >
               Download transcript
             </Button>

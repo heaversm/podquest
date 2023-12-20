@@ -43,7 +43,7 @@ const FORCE_SRT = true; //allows us to avoid refreshing the page and re-transcri
 
 const MAX_FILE_SIZE = 20; //in MB. If a podcast is over this size, split it up
 const MAX_DURATION = 300; //in seconds, if splitting by duration instead of size
-const MAX_CHUNKS = 10; //if episode exceeds this, it's probably too slow given the current transcription process
+const MAX_CHUNKS = 20; //if episode exceeds this, it's probably too slow given the current transcription process
 
 //END APP CONFIGURATION
 
@@ -53,7 +53,7 @@ import { OpenAI } from 'langchain/llms/openai';
 
 const openAIConfiguration = new Configuration({
   apiKey: process.env.OPENAI_API_KEY,
-  temperature: 0.8, //higher = more creative
+  temperature: 1.0, //higher = more creative
 });
 const openai = new OpenAIApi(openAIConfiguration);
 
@@ -182,7 +182,7 @@ const splitAudioIntoChunks = async (filePath, userLLM) => {
   });
 }; //end splitAudioIntoChunks
 
-const transcribeAudioChunks = async (outputPaths, userLLM) => {
+const transcribeAudioChunks = async (outputPaths, mode, userLLM) => {
   const transcripts = [];
   return new Promise((resolve, reject) => {
     async function transcribeAudioChunkSequentially() {
@@ -199,7 +199,8 @@ const transcribeAudioChunks = async (outputPaths, userLLM) => {
             )
             .then((response) => {
               console.log(`whisper transcribed ${filePath}`);
-
+              if (userLLM?.llmStatus) {
+              }
               userLLM.llmStatus = `transcribed audio file ${
                 i + 1
               } of ${outputPaths.length}`;
@@ -472,7 +473,7 @@ const transcribeEpisode = async function (
         userLLM.llmStatus = 'transcribing chunks';
         console.log('transcribing chunks');
 
-        await transcribeAudioChunks(outputPaths, mode).then(
+        await transcribeAudioChunks(outputPaths, mode, userLLM).then(
           (chunkedTranscripts) => {
             const joinedChunkedTranscript =
               chunkedTranscripts.join(''); // Combine all chunk transcripts

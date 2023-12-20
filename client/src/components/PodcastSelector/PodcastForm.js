@@ -1,21 +1,24 @@
-import Button from "@mui/material/Button";
-import TextField from "@mui/material/TextField";
-import Box from "@mui/material/Box";
-import Container from "@mui/material/Container";
-import React from "react";
-export function PodcastForm({ handleSetPodcasts, handleSetStatusMessage }) {
-  const [podcastName, setPodcastName] = React.useState("");
+import Button from '@mui/material/Button';
+import TextField from '@mui/material/TextField';
+import Box from '@mui/material/Box';
+import Container from '@mui/material/Container';
+import React from 'react';
+export function PodcastForm({
+  handleSetPodcasts,
+  handleSetStatusMessage,
+}) {
+  const [podcastName, setPodcastName] = React.useState('');
 
   const handlePodcastSearch = (e) => {
     e.preventDefault();
     handleSetStatusMessage({
-      message: "Searching for podcasts...",
-      type: "info",
+      message: 'Searching for podcasts...',
+      type: 'info',
     });
-    fetch("/api/searchForPodcast", {
-      method: "POST",
+    fetch('/api/searchForPodcast', {
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify({ podcastName }),
     })
@@ -24,7 +27,7 @@ export function PodcastForm({ handleSetPodcasts, handleSetStatusMessage }) {
         if (data.error) {
           handleSetStatusMessage({
             message: data.error,
-            type: "error",
+            type: 'error',
           });
         } else if (data.podcasts) {
           const { podcasts } = data;
@@ -32,7 +35,7 @@ export function PodcastForm({ handleSetPodcasts, handleSetStatusMessage }) {
         }
       })
       .catch((err) => {
-        console.log("err", err);
+        console.log('err', err);
       });
   };
 
@@ -63,6 +66,7 @@ export function PodcastForm({ handleSetPodcasts, handleSetStatusMessage }) {
             mt: 2,
             mb: 2,
           }}
+          id="submitPodcastName"
         >
           Submit
         </Button>

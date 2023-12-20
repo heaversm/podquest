@@ -1,27 +1,27 @@
-import ListItem from "@mui/material/ListItem";
-import Link from "@mui/material/Link";
-import React, { useEffect } from "react";
+import ListItem from '@mui/material/ListItem';
+import Link from '@mui/material/Link';
+import React, { useEffect } from 'react';
 
-import InputLabel from "@mui/material/InputLabel";
-import FormControl from "@mui/material/FormControl";
-import MenuItem from "@mui/material/MenuItem";
-import Select, { SelectChangeEvent } from "@mui/material/Select";
-import Box from "@mui/material/Box";
-import Container from "@mui/material/Container";
-import { Typography } from "@mui/material";
+import InputLabel from '@mui/material/InputLabel';
+import FormControl from '@mui/material/FormControl';
+import MenuItem from '@mui/material/MenuItem';
+import Select, { SelectChangeEvent } from '@mui/material/Select';
+import Box from '@mui/material/Box';
+import Container from '@mui/material/Container';
+import { Typography } from '@mui/material';
 
 export function PodcastResults({
   podcasts,
   handleSetEpisodes,
   handleSetStatusMessage,
 }) {
-  const [podcast, setPodcast] = React.useState("");
+  const [podcast, setPodcast] = React.useState('');
 
   useEffect(() => {
-    if (podcast && podcast !== "") {
+    if (podcast && podcast !== '') {
       handleSetStatusMessage({
-        message: "Searching for episodes...",
-        type: "info",
+        message: 'Searching for episodes...',
+        type: 'info',
       });
     }
   }, [podcast]);
@@ -32,10 +32,10 @@ export function PodcastResults({
     // console.log(podcastUrl);
     setPodcast(podcastUrl);
 
-    fetch("/api/searchForEpisodes", {
-      method: "POST",
+    fetch('/api/searchForEpisodes', {
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify({ podcastUrl }),
     })
@@ -44,22 +44,29 @@ export function PodcastResults({
         const { mp3s } = data;
         handleSetEpisodes(mp3s);
         handleSetStatusMessage({
-          message: "Episodes found",
-          type: "info",
+          message: 'Episodes found',
+          type: 'info',
         });
       })
       .catch((err) => {
-        console.log("err", err);
+        console.log('err', err);
       });
   };
 
   return (
     <Box className="podcastContainer">
-      <Typography variant="overline" display="block" gutterBottom align="left">
+      <Typography
+        variant="overline"
+        display="block"
+        gutterBottom
+        align="left"
+      >
         Matching results:
       </Typography>
       <FormControl sx={{ minWidth: 80 }} fullWidth>
-        <InputLabel id="selectPodcastLabel">Select Podcast</InputLabel>
+        <InputLabel id="selectPodcastLabel">
+          Select Podcast
+        </InputLabel>
         <Select
           labelId="selectPodcastLabel"
           id="selectPodcast"
@@ -70,7 +77,11 @@ export function PodcastResults({
         >
           {podcasts.map((podcast, index) => {
             return (
-              <MenuItem key={`PodcastItem${index}`} value={podcast.url}>
+              <MenuItem
+                className={`selectPodcastItem${index}`}
+                key={`PodcastItem${index}`}
+                value={podcast.url}
+              >
                 {podcast.title}
               </MenuItem>
             );

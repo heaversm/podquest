@@ -52,6 +52,7 @@ export function ModeSelector({ handleSetMode }) {
                   display: 'flex',
                   flexDirection: 'column',
                 }}
+                className="mode-select-card"
               >
                 <CardMedia
                   component="div"
@@ -85,6 +86,7 @@ export function ModeSelector({ handleSetMode }) {
                     onClick={() => {
                       handleSetMode(card.id);
                     }}
+                    className="mode-select-button"
                   >
                     Select
                   </Button>
