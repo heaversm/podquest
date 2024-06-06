@@ -858,6 +858,20 @@ app.post('/api/resetUserLLM', async (req, res) => {
   }
 });
 
+app.post('/api/coral/search', async (req, res) => {
+  return res.status(200).json({
+    results: [
+      {
+        id: 'doc1',
+        title: 'Sample Doc Title',
+        text: 'Sample Doc Text',
+        url: 'https://sampledoc.com',
+        created_at: '2023-11-25T20:09:31Z',
+      },
+    ],
+  });
+});
+
 // All other GET requests not handled before will return our React app
 app.get('*', (req, res) => {
   //MH TODO: this is resolving to "no such file or directory" but somehow still serving the index file
