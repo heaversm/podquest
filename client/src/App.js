@@ -113,6 +113,26 @@ function App() {
     });
   };
 
+  const testCoral = () => {
+    console.log('testCoral');
+    fetch('/api/coral/search', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ query: '' }),
+    })
+      .then((res) => {
+        return res.json();
+      })
+      .then((data) => {
+        console.log('data', data);
+      })
+      .catch((err) => {
+        console.log('err', err);
+      });
+  };
+
   const getEpisodeId = () => {
     console.log('get episode id from server', filePath);
     fetch('/api/getEpisodeId', {
@@ -317,6 +337,7 @@ function App() {
               handleSetMode={handleSetMode}
               handleSetStatusMessage={handleSetStatusMessage}
             />
+            <Button onClick={testCoral}>Test Coral</Button>
             {!mode && <ModeSelector handleSetMode={handleSetMode} />}
             {mode && (
               <Box
